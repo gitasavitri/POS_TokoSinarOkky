@@ -64,11 +64,14 @@ class Lencana extends StatelessWidget {
       case 'Data diubah':
       case 'Retur':
       case 'Ada retur':
+      case 'Menipis':
       case 'Menunggu':
       case 'menunggu':
         return Lencana(teks, latar: Warna.oranyeMuda, warna: Warna.oranye);
       case 'Dibatalkan':
       case 'Batal':
+      case 'Rusak':
+      case 'Habis':
       case 'Terkunci':
       case 'ditolak':
         return Lencana(teks, latar: Warna.merahMuda, warna: Warna.merah);

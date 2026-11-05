@@ -130,6 +130,7 @@ class _HalamanMasukState extends State<HalamanMasuk> {
                 ]),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const Text('Masuk', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
+                  for (final p in context.app.peringatan) ...[const SizedBox(height: 12), KotakPesan(p, jenis: JenisPesan.perhatian)],
                   const SizedBox(height: 24),
                   Row(children: [
                     Expanded(child: _tombolPeran('Kasir / SPV', !_admin, () => setState(() {

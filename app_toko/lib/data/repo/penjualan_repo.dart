@@ -2,6 +2,7 @@ import 'package:pos_core/pos_core.dart';
 
 import '../database.dart';
 import '../model.dart';
+import 'pemulihan_repo.dart';
 
 class HasilSimpanTransaksi {
   const HasilSimpanTransaksi({required this.transaksiId, required this.noTransaksi, required this.struk});
@@ -11,6 +12,22 @@ class HasilSimpanTransaksi {
 }
 
 /// Shift kasir, simpan transaksi, pembatalan, retur, struk ulang.
+/// Jam komputer lebih awal dari transaksi terakhir (biasanya baterai BIOS habis setelah listrik padam).
+/// Penjualan ditahan supaya nomor struk dan laporan tidak kacau.
+class JamMundur implements Exception {
+  const JamMundur(this.terakhir, this.sekarang);
+  final DateTime terakhir;
+  final DateTime sekarang;
+  String get pesan =>
+      'Jam komputer mundur: sekarang ${formatLayar(sekarang)}, padahal transaksi terakhir ${formatLayar(terakhir)}. '
+      'Betulkan tanggal & jam Windows dulu (klik kanan jam di pojok kanan bawah → Adjust date/time).';
+  @override
+  String toString() => pesan;
+}
+
+/// Toleransi selisih jam (koreksi otomatis Windows bisa memundurkan jam beberapa detik/menit).
+const toleransiJamMundur = Duration(minutes: 10);
+
 class PenjualanRepo {
   PenjualanRepo(this._db);
   final DatabaseToko _db;
@@ -99,6 +116,19 @@ class PenjualanRepo {
 
   // ---------------------------------------------------------------- transaksi
 
+  /// Waktu transaksi terakhir di cabang ini (null kalau belum ada).
+  DateTime? transaksiTerakhir(String cabangId) {
+    final r = _db.satu('SELECT created_at FROM transaksi WHERE cabang_id = ? ORDER BY created_at DESC LIMIT 1', [cabangId]);
+    return r == null ? null : DateTime.parse(r['created_at'] as String);
+  }
+
+  /// Lempar [JamMundur] kalau jam komputer jauh lebih awal dari transaksi terakhir.
+  void cekJam(String cabangId, [DateTime? sekarang]) {
+    final terakhir = transaksiTerakhir(cabangId);
+    final s = sekarang ?? _db.sekarang();
+    if (terakhir != null && s.isBefore(terakhir.subtract(toleransiJamMundur))) throw JamMundur(terakhir, s);
+  }
+
   /// Nomor yang akan dipakai transaksi berikutnya (untuk ditampilkan di layar kasir).
   String nomorBerikutnya(InfoCabang cabang) => _nomorBerikutnya(cabang, _db.sekarang());
 
@@ -130,9 +160,15 @@ class PenjualanRepo {
 
     return _db.transaksi(() {
       final waktu = _db.sekarang();
+      cekJam(cabang.id, waktu);
       final t = isoUtc(waktu);
       final id = buatId();
       final no = _nomorBerikutnya(cabang, waktu);
+      // Ditulis di transaksi database yang sama: kalau listrik padam sesudah ini, belanjaan tidak
+      // muncul lagi sebagai "belum dibayar" (mencegah dobel), dan aplikasi tahu struk mungkin belum tercetak.
+      final pulih = PemulihanRepo(_db);
+      pulih.hapusKeranjang();
+      pulih.tandaiBelumCetak(id);
       _db.jalankan(
         'INSERT INTO transaksi (id, cabang_id, no_transaksi, shift_id, kasir_id, total, jumlah_barang, created_at)'
         ' VALUES (?,?,?,?,?,?,?,?)',

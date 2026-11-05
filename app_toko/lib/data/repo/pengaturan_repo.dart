@@ -17,6 +17,8 @@ class PengaturanRepo {
   static const kServerUrl = 'server_url';
   static const kTokenPerangkat = 'token_perangkat';
   static const kSinkronTerakhir = 'sinkron_terakhir';
+  static const kFolderCadangan2 = 'folder_cadangan_kedua';
+  static const kCadanganTerakhir = 'cadangan_terakhir';
 
   String? ambil(String kunci) =>
       _db.satu('SELECT nilai FROM pengaturan_perangkat WHERE kunci = ?', [kunci])?['nilai'] as String?;

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:pos_core/pos_core.dart';
 
@@ -8,7 +6,6 @@ import '../../layanan/aplikasi.dart';
 import '../../layanan/sinkron.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
-import 'shift.dart';
 import 'transaksi.dart';
 
 /// Pengaturan printer (per PC), info toko, kategori & supplier, cadangan data.
@@ -144,15 +141,22 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             _Baris('Data penjualan tersimpan di', 'Komputer ini (tetap jalan tanpa internet)'),
             _Baris('Lokasi file database', app.lokasiDatabase ?? '-'),
-            const _Baris('Cadangan otomatis', 'Setiap tutup shift → Documents\\POS-Cadangan'),
+            _Baris('Cadangan otomatis', 'Tiap 1 jam & setiap tutup shift → ${app.folderCadangan} (14 terbaru disimpan)'),
+            _Baris('Cadangan terakhir', () {
+              final t = DateTime.tryParse(app.pengaturan.ambil(PengaturanRepo.kCadanganTerakhir) ?? '');
+              return t == null ? 'Belum ada' : '${formatJam(t)} · ${formatTanggal(t)}';
+            }()),
+            const SizedBox(height: 8),
+            if (admin) const _FlashdiskCadangan(),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
                 onPressed: () async {
                   try {
-                    final f = app.cadangkan(await folderCadangan());
+                    final f = app.cadangkan();
                     if (context.mounted) tampilkanPesan(context, 'Tersimpan: $f');
+                    setState(() {});
                   } catch (e) {
                     if (context.mounted) tampilkanPesan(context, 'Gagal: ${pesanGalat(e)}', galat: true);
                   }
@@ -162,13 +166,55 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
               ),
             ),
             const SizedBox(height: 8),
-            Text('Salin folder cadangan ke flashdisk secara rutin. Sistem operasi: ${Platform.operatingSystem}.',
-                style: const TextStyle(fontSize: 15, color: Warna.teksPudar)),
+            const Text(
+              'Kalau suatu saat database rusak (mis. hardisk bermasalah), aplikasi otomatis menawarkan pemulihan dari cadangan ini '
+              'saat dibuka, dengan PIN SPV/Admin.',
+              style: TextStyle(fontSize: 15, color: Warna.teksPudar),
+            ),
           ]),
         ),
       ],
     ]);
   }
+}
+
+/// Admin: salin cadangan juga ke flashdisk (huruf drive).
+class _FlashdiskCadangan extends StatefulWidget {
+  const _FlashdiskCadangan();
+  @override
+  State<_FlashdiskCadangan> createState() => _FlashdiskCadanganState();
+}
+
+class _FlashdiskCadanganState extends State<_FlashdiskCadangan> {
+  late final _drive = TextEditingController(text: context.app.pengaturan.ambil(PengaturanRepo.kFolderCadangan2) ?? '');
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _drive,
+            style: const TextStyle(fontSize: 18),
+            decoration: const InputDecoration(
+              labelText: 'Salin juga ke flashdisk (huruf drive, mis. E:) — boleh kosong',
+              helperText: 'Kalau flashdisk tidak tercolok, cadangan tetap tersimpan di PC.',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton(
+          onPressed: () {
+            final d = _drive.text.trim().toUpperCase().replaceAll(RegExp(r'[\\/]+$'), '');
+            if (d.isNotEmpty && !RegExp(r'^[A-Z]:$').hasMatch(d)) {
+              tampilkanPesan(context, 'Isi huruf drive saja, contoh E:', galat: true);
+              return;
+            }
+            context.app.pengaturan.simpan(PengaturanRepo.kFolderCadangan2, d.isEmpty ? null : d);
+            _drive.text = d;
+            tampilkanPesan(context, d.isEmpty ? 'Salinan ke flashdisk dimatikan.' : 'Cadangan berikutnya juga disalin ke $d\\POS-Cadangan.');
+          },
+          child: const Text('Simpan'),
+        ),
+      ]);
 }
 
 class _Baris extends StatelessWidget {

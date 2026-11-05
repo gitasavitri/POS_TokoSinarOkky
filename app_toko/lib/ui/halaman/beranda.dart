@@ -45,6 +45,7 @@ class IsiBeranda extends StatelessWidget {
     ];
 
     return ListView(padding: const EdgeInsets.all(24), children: [
+      for (final p in app.peringatan) ...[KotakPesan(p, jenis: JenisPesan.perhatian), const SizedBox(height: 12)],
       Row(children: [
         Expanded(child: Text('Hari ini · ${formatTanggal(DateTime.now())}', style: const TextStyle(fontSize: 18, color: Warna.teksPudar))),
         FilledButton.icon(onPressed: () => onMenu(MenuAdmin.penjualan), icon: const Icon(Icons.point_of_sale), label: const Text('Buka layar kasir')),

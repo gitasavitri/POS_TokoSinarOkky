@@ -118,6 +118,12 @@ class KatalogRepo {
     return detail(r['barang_id'] as String, cabangId)?.untukDijual;
   }
 
+  /// Barang yang bisa dijual di kasir toko ini, dicari dengan id (memuat ulang belanjaan tersimpan).
+  BarangJual? untukKasir(String barangId, String cabangId) {
+    if (_db.satu('SELECT 1 FROM barang_toko WHERE cabang_id = ? AND barang_id = ?', [cabangId, barangId]) == null) return null;
+    return detail(barangId, cabangId)?.untukDijual;
+  }
+
   /// Cari dengan nama (berisi kata) atau awal barcode. [hanyaDiToko] = hanya barang yang dijual di toko ini.
   List<DetailBarang> cari(String kata, String cabangId, {bool hanyaDiToko = true, int batas = 30}) {
     final k = kata.trim();

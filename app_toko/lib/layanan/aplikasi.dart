@@ -11,20 +11,25 @@ import '../data/repo/barang_masuk_repo.dart';
 import '../data/repo/harga_repo.dart';
 import '../data/repo/katalog_repo.dart';
 import '../data/repo/laporan_repo.dart';
+import '../data/repo/pemulihan_repo.dart';
 import '../data/repo/pengaturan_repo.dart';
 import '../data/repo/pengguna_repo.dart';
 import '../data/repo/penjualan_repo.dart';
 import '../data/repo/setup_repo.dart';
+import 'cadangan.dart';
 import 'printer.dart';
 import 'sinkron.dart';
+import 'sistem.dart';
 
 /// Lama tidak dipakai sebelum keluar otomatis.
 const batasDiam = Duration(minutes: 10);
 
 /// Semua layanan aplikasi + sesi pengguna yang sedang masuk.
 class Aplikasi extends ChangeNotifier {
-  Aplikasi({required this.db, required this.printer, this.lokasiDatabase})
-      : pengaturan = PengaturanRepo(db),
+  Aplikasi({required this.db, required this.printer, this.lokasiDatabase, String? folderCadangan, this.catatan})
+      : folderCadangan = folderCadangan ?? '${Directory.systemTemp.path}${Platform.pathSeparator}POS-Cadangan',
+        pemulihan = PemulihanRepo(db),
+        pengaturan = PengaturanRepo(db),
         pengguna = PenggunaRepo(db),
         katalog = KatalogRepo(db),
         penjualan = PenjualanRepo(db),
@@ -37,6 +42,18 @@ class Aplikasi extends ChangeNotifier {
   final DatabaseToko db;
   final LayananPrinter printer;
   final String? lokasiDatabase;
+
+  /// Folder cadangan utama (Documents\POS-Cadangan di PC kasir).
+  final String folderCadangan;
+
+  /// Catatan galat ke file (null di test).
+  final CatatanGalat? catatan;
+
+  /// Belanjaan tersimpan & struk belum tercetak, untuk pulih setelah listrik padam.
+  final PemulihanRepo pemulihan;
+
+  late final LayananCadangan cadangan =
+      LayananCadangan(db, folder: folderCadangan, folderKedua: () => pengaturan.ambil(PengaturanRepo.kFolderCadangan2));
 
   final PengaturanRepo pengaturan;
   final PenggunaRepo pengguna;
@@ -131,15 +148,67 @@ class Aplikasi extends ChangeNotifier {
 
   // ---------------------------------------------------------------- cadangan
 
-  /// Salin database utuh ke [folder] memakai `VACUUM INTO` (aman walau aplikasi sedang jalan).
-  String cadangkan(String folder) {
-    final dir = Directory(folder)..createSync(recursive: true);
-    final w = keWib(db.sekarang());
-    String d2(int n) => n.toString().padLeft(2, '0');
-    final nama = 'pos-${cabang.kode}-${w.year}${d2(w.month)}${d2(w.day)}-${d2(w.hour)}${d2(w.minute)}${d2(w.second)}.db';
-    final tujuan = '${dir.path}${Platform.pathSeparator}$nama';
-    db.jalankan('VACUUM INTO ?', [tujuan]);
-    return tujuan;
+  /// Buat cadangan sekarang (VACUUM INTO, aman walau aplikasi sedang dipakai). Mengembalikan path file.
+  String cadangkan() {
+    final f = cadangan.buat(cabang.kode);
+    pengaturan.simpan(PengaturanRepo.kCadanganTerakhir, db.sekarangIso());
+    _galatCadangan = null;
+    return f;
+  }
+
+  // ---------------------------------------------------------------- tugas latar & peringatan
+
+  Timer? _timerLatar;
+  String? _galatCadangan;
+  int? _ruangKosong;
+
+  /// Cadangan otomatis tiap jam + cek kondisi PC. Dipanggil sekali dari main().
+  void mulaiTugasLatar({Duration jeda = const Duration(hours: 1)}) {
+    _timerLatar?.cancel();
+    _timerLatar = Timer.periodic(jeda, (_) => jalankanTugasLatar());
+    jalankanTugasLatar();
+  }
+
+  void jalankanTugasLatar() {
+    if (lokasiDatabase != null) _ruangKosong = ruangKosong(lokasiDatabase!);
+    if (!sudahDisiapkan) return;
+    final terakhir = DateTime.tryParse(pengaturan.ambil(PengaturanRepo.kCadanganTerakhir) ?? '');
+    if (terakhir == null || db.sekarang().difference(terakhir) >= const Duration(minutes: 55)) {
+      try {
+        cadangkan();
+      } catch (e, s) {
+        _galatCadangan = '$e';
+        catatan?.tulis(e, s, konteks: 'cadangan otomatis');
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Hal yang perlu diketahui Admin/kasir (ditampilkan di layar masuk & menu).
+  List<String> get peringatan {
+    final p = <String>[];
+    if (_ruangKosong != null && _ruangKosong! < batasRuangKosong) {
+      p.add('Hardisk hampir penuh (sisa ${(_ruangKosong! / 1048576).round()} MB). Hapus file yang tidak perlu.');
+    }
+    if (_galatCadangan != null) p.add('Cadangan otomatis gagal: $_galatCadangan');
+    final selisih = sinkron.selisihJamServer;
+    if (selisih != null && selisih.inMinutes.abs() >= 5) {
+      p.add('Jam komputer ${selisih.isNegative ? 'terlambat' : 'terlalu cepat'} ${selisih.inMinutes.abs()} menit dibanding server. Betulkan jam Windows.');
+    }
+    try {
+      if (sudahDisiapkan) penjualan.cekJam(cabang.id);
+    } on JamMundur catch (e) {
+      p.add(e.pesan);
+    }
+    return p;
+  }
+
+  @override
+  void dispose() {
+    _timerLatar?.cancel();
+    _timerDiam?.cancel();
+    sinkron.dispose();
+    super.dispose();
   }
 }
 

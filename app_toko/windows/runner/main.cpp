@@ -7,6 +7,17 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // Hanya boleh satu aplikasi kasir terbuka. Kalau sudah terbuka, tampilkan jendela yang ada lalu keluar.
+  HANDLE satu_saja = ::CreateMutexW(nullptr, TRUE, L"Local\\POS_Toko_SinarOkky");
+  if (::GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND ada = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"POS Toko Sinar Okky");
+    if (ada != nullptr) {
+      ::ShowWindow(ada, SW_RESTORE);
+      ::SetForegroundWindow(ada);
+    }
+    return EXIT_SUCCESS;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -39,5 +50,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (satu_saja != nullptr) ::CloseHandle(satu_saja);
   return EXIT_SUCCESS;
 }

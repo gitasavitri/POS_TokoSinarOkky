@@ -94,7 +94,7 @@ class _DialogTutupShiftState extends State<_DialogTutupShift> {
     app.penjualan.tutupShift(shiftId: _r.shift.id, kasDihitung: _dihitung!, olehId: p.id);
     String pesan = 'Shift ditutup.';
     try {
-      final f = app.cadangkan(await folderCadangan());
+      final f = app.cadangkan();
       pesan += ' Data dicadangkan ke $f';
     } catch (e) {
       pesan += ' Cadangan otomatis gagal: ${pesanGalat(e)}';

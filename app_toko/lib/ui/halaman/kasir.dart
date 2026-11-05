@@ -58,7 +58,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
   Aplikasi get app => context.app;
 
   Future<void> _pastikanShift() async {
-    if (app.shiftAktif != null) return;
+    if (app.shiftAktif != null) return _pulihkan();
     final s = await bukaShiftDialog(context);
     if (!mounted) return;
     if (s == null) {
@@ -70,6 +70,75 @@ class _HalamanKasirState extends State<HalamanKasir> {
       return;
     }
     app.aturShift(s);
+    await _pulihkan();
+    _fokuskan();
+  }
+
+  /// Simpan isi keranjang ke database setiap kali berubah, supaya tidak hilang kalau listrik padam.
+  void _simpanKeranjang() {
+    final p = app.penggunaAktif;
+    if (p == null) return;
+    try {
+      app.pemulihan.simpanKeranjang(kasirId: p.id, aktif: _keranjang, ditahan: _ditahan);
+    } catch (e, st) {
+      app.catatan?.tulis(e, st, konteks: 'simpan keranjang');
+    }
+  }
+
+  /// Setelah aplikasi dibuka lagi (mis. sesudah listrik padam): tawarkan cetak struk yang tertunda
+  /// dan lanjutkan belanjaan yang belum dibayar.
+  Future<void> _pulihkan() async {
+    final idStruk = app.pemulihan.strukBelumCetak();
+    if (idStruk != null) {
+      final struk = app.penjualan.struk(idStruk, app.cabang);
+      if (struk != null && mounted) {
+        final cetak = await konfirmasi(
+          context,
+          judul: 'Struk mungkin belum tercetak',
+          isi: 'Transaksi ${struk.noTransaksi} (${formatRupiah(struk.total)}) sudah tersimpan, tapi aplikasi tertutup '
+              'sebelum struknya selesai dicetak. Cetak struknya sekarang?',
+          ya: 'Cetak struk',
+          batal: 'Tidak perlu',
+        );
+        if (cetak) {
+          final g = await app.cetakStrukTransaksi(struk, ulang: true);
+          if (mounted && g != null) tampilkanPesan(context, g, galat: true);
+        }
+      }
+      app.pemulihan.selesaiCetak();
+    }
+
+    if (!_keranjang.kosong || !mounted) return;
+    final t = app.pemulihan.muatKeranjang(app.cabang.id);
+    if (t == null) return;
+    if (t.kosong) {
+      app.pemulihan.hapusKeranjang();
+      return;
+    }
+    final lanjut = await konfirmasi(
+      context,
+      judul: 'Ada belanjaan yang belum dibayar',
+      isi: 'Aplikasi tertutup saat ${t.namaKasir} sedang melayani (${formatJam(t.waktu)}): '
+          '${t.aktif.jumlahJenis} jenis barang, ${formatRupiah(t.aktif.total)}'
+          '${t.ditahan.isEmpty ? '' : ', dan ${t.ditahan.length} transaksi ditahan'}. '
+          'Belum ada yang dibayar.${t.hilang > 0 ? ' (${t.hilang} barang sudah tidak dijual dan tidak dimuat.)' : ''}',
+      ya: 'Lanjutkan belanjaan',
+      batal: 'Buang',
+      bahaya: false,
+    );
+    if (!mounted) return;
+    if (lanjut) {
+      setState(() {
+        for (final b in t.aktif.baris) {
+          _keranjang.tambah(b.barang, qty: b.qty);
+        }
+        _ditahan.addAll(t.ditahan);
+        _barisDipilih = _keranjang.kosong ? null : _keranjang.barisTerakhir;
+      });
+      _simpanKeranjang();
+    } else {
+      app.pemulihan.hapusKeranjang();
+    }
     _fokuskan();
   }
 
@@ -89,6 +158,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
       _qty.text = '1';
       _scan.clear();
     });
+    _simpanKeranjang();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_gulir.hasClients) {
         final tujuan = (_keranjang.barisTerakhir * 64.0).clamp(0.0, _gulir.position.maxScrollExtent);
@@ -133,7 +203,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
     if (_keranjang.kosong) return;
     final ok = await konfirmasi(context,
         judul: 'Kosongkan belanja?', isi: 'Semua barang di layar akan dihapus. Belum ada yang tersimpan.', ya: 'Kosongkan', bahaya: true);
-    if (ok) setState(_keranjang.kosongkan);
+    if (ok) {
+      setState(_keranjang.kosongkan);
+      _simpanKeranjang();
+    }
     _fokuskan();
   }
 
@@ -144,6 +217,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
       _keranjang.kosongkan();
       _barisDipilih = null;
     });
+    _simpanKeranjang();
     tampilkanPesan(context, 'Transaksi ditahan. Ambil lagi lewat tombol "Ditahan".');
     _fokuskan();
   }
@@ -176,6 +250,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
         _keranjang.tambah(b.barang, qty: b.qty);
       }
     });
+    _simpanKeranjang();
     _fokuskan();
   }
 
@@ -195,8 +270,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
     });
     String? galatCetak;
     if (app.cetakOtomatis) galatCetak = await app.cetakStrukTransaksi(hasil.struk);
+    if (app.cetakOtomatis && galatCetak == null) app.pemulihan.selesaiCetak();
     if (!mounted) return;
     await showDialog<void>(context: context, builder: (_) => DialogSelesai(hasil: hasil, galatCetak: galatCetak));
+    app.pemulihan.selesaiCetak(); // kasir sudah melihat hasilnya (dan bisa cetak ulang dari dialog)
     _fokuskan();
   }
 
@@ -237,6 +314,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
       _keranjang.hapus(i);
       _barisDipilih = _keranjang.kosong ? null : _keranjang.barisTerakhir;
     });
+    _simpanKeranjang();
     _fokuskan();
   }
 
@@ -320,6 +398,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                             onPilih: () => setState(() => _barisDipilih = i),
                             onQty: (q) {
                               setState(() => _keranjang.ubahQty(i, q));
+                              _simpanKeranjang();
                               _fokuskan();
                             },
                             onHapus: () => _hapusBaris(i),

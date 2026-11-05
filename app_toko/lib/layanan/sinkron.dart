@@ -28,6 +28,9 @@ class LayananSinkron extends ChangeNotifier {
   /// Data dari toko ini yang ditolak server (akan dicoba lagi).
   List<String> ditolakTerakhir = const [];
 
+  /// Selisih jam PC ini dengan Server Pusat (positif = jam PC lebih cepat). null = belum diketahui.
+  Duration? selisihJamServer;
+
   /// Data dari pusat yang tidak bisa diterapkan di toko ini (mis. barcode kembar).
   List<String> masalahTerakhir = const [];
 
@@ -108,6 +111,8 @@ class LayananSinkron extends ChangeNotifier {
       final cabangId = _pengaturan.ambil(PengaturanRepo.kCabangId)!;
       for (var putaran = 0; putaran < 50; putaran++) {
         final r = await k.minta('GET', '/api/sinkron/ambil', query: {'sejak': '${repo.kursor}'});
+        final waktuServer = DateTime.tryParse(r['waktu'] as String? ?? '');
+        if (waktuServer != null) selisihJamServer = DateTime.now().toUtc().difference(waktuServer);
         final perubahan = [for (final p in (r['perubahan'] as List)) Map<String, Object?>.from(p as Map)];
         final h = repo.terapkan(perubahan, kursorBaru: (r['kursor'] as num).toInt(), cabangId: cabangId);
         if (h.masalah.isNotEmpty) masalahTerakhir = h.masalah;

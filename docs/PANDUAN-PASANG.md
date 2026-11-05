@@ -72,16 +72,38 @@ Ikuti [`server/README.md`](../server/README.md). Ringkasnya:
 Kode pendaftaran berlaku 24 jam dan hanya untuk 1 PC. Kalau PC kasir diganti, daftarkan PC baru dengan kode
 baru; PC lama otomatis berhenti. PC yang hilang bisa dicabut dari **Toko & perangkat**.
 
-## E. Cadangan data dan pemulihan
+## E. Listrik padam, cadangan, dan pemulihan
 
-- **Otomatis**: setiap tutup shift, salinan database disimpan di `Documents\POS-Cadangan` di PC kasir.
-- **Manual**: buka **Pengaturan → Cadangkan sekarang**. Salin folder `POS-Cadangan` ke flashdisk seminggu sekali.
-- Lokasi database aktif tertulis di **Pengaturan → Data & cadangan**.
-- **Memulihkan** (PC rusak atau diganti):
-  1. Pasang program di PC baru dan buka sekali, lalu tutup.
-  2. Salin file cadangan terbaru ke lokasi database aktif dan beri nama `pos_toko.db`.
-  3. Buka lagi aplikasinya.
-  4. Kalau toko sudah tersambung ke pusat, daftarkan ulang PC dengan kode baru.
+**Kalau listrik padam saat berjualan**
+- Transaksi disimpan "semua atau tidak sama sekali". Tidak ada transaksi setengah jadi yang nyangkut, jadi tidak
+  perlu *repair* database seperti di program lama.
+- Belanjaan yang sedang di-scan (belum dibayar) tersimpan setiap kali scan. Saat aplikasi dibuka lagi muncul
+  **"Ada belanjaan yang belum dibayar"**: pilih Lanjutkan atau Buang.
+- Kalau transaksi sudah tersimpan tapi struk belum sempat keluar, muncul **"Struk mungkin belum tercetak"** dan
+  tombol Cetak.
+- Kalau jam komputer mundur (baterai BIOS habis), penjualan ditahan sampai jam Windows dibetulkan.
+
+**Cadangan**
+- Cadangan otomatis dibuat **tiap 1 jam** dan **setiap tutup shift** di `Documents\POS-Cadangan`.
+  14 cadangan terbaru disimpan.
+- Admin bisa mengisi huruf drive flashdisk di **Pengaturan → Data & cadangan**, misalnya `E:`, supaya cadangan
+  juga disalin ke `E:\POS-Cadangan`.
+- Data yang sudah terkirim juga tersimpan di Server Pusat.
+
+**Kalau database rusak** (misalnya hardisk bermasalah)
+- Saat dibuka, aplikasi memeriksa database. Kalau rusak, muncul layar **Pemulihan** yang berisi daftar cadangan
+  (dari PC dan flashdisk yang tercolok).
+- Pilih cadangan terbaru yang bertanda "Aman", lalu masukkan PIN SPV/Admin.
+- File lama tidak dihapus, hanya diganti nama menjadi `*.rusak-…`.
+- Transaksi sesudah waktu cadangan tidak ada di PC. Kalau sudah terkirim, datanya masih ada di pusat.
+
+**Saran perangkat**
+- Pakai **UPS dengan kabel USB ke PC** dan pasang aplikasinya, supaya Windows mati dengan benar saat baterai UPS
+  hampir habis.
+- Di Windows Update, atur **Active hours** sesuai jam buka toko supaya PC tidak restart sendiri saat berjualan.
+- Kalau setelah listrik padam tanggal di Windows salah, ganti baterai BIOS (CMOS, CR2032).
+
+Galat aplikasi dicatat di folder data aplikasi, sub-folder `log`, untuk dikirim ke developer kalau ada masalah.
 
 ## F. Daftar cek hari pembukaan
 
@@ -105,4 +127,7 @@ baru; PC lama otomatis berhenti. PC yang hilang bisa dicabut dari **Toko & peran
 | "Menunggu dikirim" terus bertambah | Cek internet PC toko. Penjualan tetap aman di PC; data terkirim saat tersambung lagi. |
 | "Ditolak server" di Pengaturan | Kirim foto layarnya ke developer. Data tetap di PC dan dicoba lagi otomatis. |
 | "Perlu dicek: barcode … sudah dipakai" | Dua toko membuat barang dengan barcode sama saat offline. Rapikan di Aplikasi Pusat → **Barcode kembar**. |
+| "Jam komputer mundur" | Betulkan tanggal & jam Windows (klik kanan jam di pojok kanan bawah → Adjust date/time). |
+| Layar "Database perlu dipulihkan" | Pilih cadangan terbaru bertanda "Aman" + PIN SPV/Admin. Jangan hapus file apa pun. |
+| "Hardisk hampir penuh" | Hapus file yang tidak perlu (bukan folder POS-Cadangan). |
 | Admin pusat terkunci | Di VPS jalankan `npm run buka-kunci -- nama.pengguna`. |

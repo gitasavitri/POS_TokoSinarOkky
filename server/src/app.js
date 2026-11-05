@@ -53,7 +53,8 @@ export function buatApp(pool, { trustProxy = false, catatGalat = console.error, 
     const sejak = Number(req.query.sejak ?? 0);
     wajib(Number.isSafeInteger(sejak) && sejak >= 0, 'sejak tidak valid');
     const batas = Math.min(Number(req.query.batas) || MAKS_AMBIL, MAKS_AMBIL);
-    res.json(await ambilPerubahan(pool, req.perangkat, sejak, batas, new Date(), jedaSinkronDetik));
+    // waktu server ikut dikirim supaya PC toko bisa memperingatkan kalau jamnya salah.
+    res.json({ ...(await ambilPerubahan(pool, req.perangkat, sejak, batas, new Date(), jedaSinkronDetik)), waktu: isoUtc() });
   });
 
   // ---------------------------------------------------------------- Admin pusat
