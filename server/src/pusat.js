@@ -209,13 +209,20 @@ export async function ringkasan(kon, q) {
       ` WHERE t.created_at >= ? AND t.created_at < ? AND ${BUKAN_BATAL}${fc.sql} GROUP BY t.cabang_id`,
     [dari, sampai, ...fc.param],
   );
-  const retur = await pilih(
+  // Dua query terpisah (bukan subquery di dalam SUM) supaya sah di mode ONLY_FULL_GROUP_BY MySQL 8.
+  const returTotal = await pilih(
     kon,
-    'SELECT t.cabang_id, IFNULL(SUM(r.total_kembali), 0) AS total,' +
-      ' IFNULL(SUM((SELECT SUM((i.harga_satuan - i.hpp_satuan) * ri.qty) FROM retur_item ri JOIN transaksi_item i ON i.id = ri.transaksi_item_id WHERE ri.retur_id = r.id)), 0) AS laba' +
-      ` FROM retur r JOIN transaksi t ON t.id = r.transaksi_id WHERE r.created_at >= ? AND r.created_at < ?${fc.sql} GROUP BY t.cabang_id`,
+    `SELECT t.cabang_id, IFNULL(SUM(r.total_kembali), 0) AS total FROM retur r JOIN transaksi t ON t.id = r.transaksi_id WHERE r.created_at >= ? AND r.created_at < ?${fc.sql} GROUP BY t.cabang_id`,
     [dari, sampai, ...fc.param],
   );
+  const returLaba = await pilih(
+    kon,
+    'SELECT t.cabang_id, IFNULL(SUM((i.harga_satuan - i.hpp_satuan) * ri.qty), 0) AS laba FROM retur_item ri' +
+      ' JOIN retur r ON r.id = ri.retur_id JOIN transaksi_item i ON i.id = ri.transaksi_item_id JOIN transaksi t ON t.id = r.transaksi_id' +
+      ` WHERE r.created_at >= ? AND r.created_at < ?${fc.sql} GROUP BY t.cabang_id`,
+    [dari, sampai, ...fc.param],
+  );
+  const retur = returTotal.map((r) => ({ ...r, laba: returLaba.find((x) => x.cabang_id === r.cabang_id)?.laba ?? 0 }));
   const batal = await pilih(
     kon,
     `SELECT t.cabang_id, COUNT(*) AS n FROM pembatalan x JOIN transaksi t ON t.id = x.transaksi_id WHERE x.created_at >= ? AND x.created_at < ?${fc.sql} GROUP BY t.cabang_id`,

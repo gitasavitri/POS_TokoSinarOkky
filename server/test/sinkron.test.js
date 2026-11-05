@@ -169,9 +169,11 @@ describe('Server Pusat', { skip: lewati }, () => {
     const jualB = penjualanContoh(B, { qty: 2, harga: 17500, waktu: '2026-11-05T04:00:00Z' });
     const batalB = penjualanContoh(B, { qty: 3, harga: 17500, waktu: '2026-11-05T04:10:00Z', no: 2 });
     const pembatalan = { transaksi_id: batalB.trx.id, alasan: 'Salah input', diminta_oleh: B.kasir.id, disetujui_oleh: B.admin.id, created_at: '2026-11-05T04:11:00Z' };
+    const retur = { id: crypto.randomUUID(), transaksi_id: jualB.trx.id, alasan: 'Kemasan sobek', total_kembali: 17500, diproses_oleh: B.admin.id, created_at: '2026-11-05T04:20:00Z' };
+    const returItem = { id: crypto.randomUUID(), retur_id: retur.id, transaksi_item_id: jualB.ti.id, qty: 1, kembali_ke_stok: 0 };
     const r = await minta('POST', '/api/sinkron/kirim', {
       token: perangkat.B.token,
-      isi: { item: [...jualB.item, ...batalB.item, item('pembatalan', pembatalan, batalB.trx.id)] },
+      isi: { item: [...jualB.item, ...batalB.item, item('pembatalan', pembatalan, batalB.trx.id), item('retur', retur), item('retur_item', returItem)] },
     });
     assert.deepEqual(r.isi.ditolak, []);
 
@@ -181,10 +183,12 @@ describe('Server Pusat', { skip: lewati }, () => {
     const b = s.per_cabang.find((c) => c.kode === 'B02');
     assert.equal(a.penjualan_bersih, 15 * 17000);
     assert.equal(a.laba_kotor, 15 * (17000 - 16200));
-    assert.equal(b.penjualan_bersih, 2 * 17500);
+    assert.equal(b.penjualan_bersih, 2 * 17500 - 17500, 'dikurangi retur');
+    assert.equal(b.laba_kotor, 2 * (17500 - 16200) - (17500 - 16200), 'laba retur ikut dikurangi');
+    assert.equal(b.total_retur, 17500);
     assert.equal(b.jumlah_transaksi, 1);
     assert.equal(b.jumlah_batal, 1);
-    assert.equal(s.total.penjualan_bersih, 15 * 17000 + 2 * 17500);
+    assert.equal(s.total.penjualan_bersih, 15 * 17000 + 17500);
     assert.ok(Number.isInteger(s.total.penjualan_bersih), 'uang dikembalikan sebagai bilangan bulat');
 
     const harian = (await minta('GET', `/api/pusat/penjualan-harian${q}`, { token: tokenAdmin })).isi;
