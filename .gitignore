@@ -26,3 +26,4 @@ backup/
 .DS_Store
 Thumbs.db
 .vscode/settings.json
+pubspec.lock.bak
