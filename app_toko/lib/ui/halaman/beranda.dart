@@ -5,7 +5,6 @@ import '../../layanan/aplikasi.dart';
 import '../komponen/kerangka.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
-import 'laporan.dart';
 
 /// Beranda SPV/Admin: ringkasan hari ini, hal yang perlu dicek, stok menipis, terlaris.
 class IsiBeranda extends StatelessWidget {

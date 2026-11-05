@@ -7,37 +7,10 @@ import 'package:pos_core/pos_core.dart';
 import '../../data/model.dart';
 import '../../data/repo/laporan_repo.dart';
 import '../../layanan/aplikasi.dart';
-import '../komponen/kerangka.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
 import 'transaksi.dart';
 
-enum Periode {
-  hariIni('Hari ini'),
-  kemarin('Kemarin'),
-  tujuhHari('7 hari'),
-  bulanIni('Bulan ini'),
-  bulanLalu('Bulan lalu'),
-  tahunIni('Tahun ini');
-
-  const Periode(this.label);
-  final String label;
-
-  /// (dari, sampai) dalam UTC, batas hari mengikuti WIB.
-  (DateTime, DateTime) rentang(DateTime sekarang) {
-    final hari = awalHariWibUtc(sekarang);
-    final w = keWib(sekarang);
-    DateTime awalBulanWib(int tahun, int bulan) => DateTime.utc(tahun, bulan).subtract(const Duration(hours: 7));
-    return switch (this) {
-      Periode.hariIni => (hari, hari.add(const Duration(days: 1))),
-      Periode.kemarin => (hari.subtract(const Duration(days: 1)), hari),
-      Periode.tujuhHari => (hari.subtract(const Duration(days: 6)), hari.add(const Duration(days: 1))),
-      Periode.bulanIni => (awalBulanWib(w.year, w.month), awalBulanWib(w.year, w.month + 1)),
-      Periode.bulanLalu => (awalBulanWib(w.year, w.month - 1), awalBulanWib(w.year, w.month)),
-      Periode.tahunIni => (awalBulanWib(w.year, 1), awalBulanWib(w.year + 1, 1)),
-    };
-  }
-}
 
 class IsiLaporan extends StatefulWidget {
   const IsiLaporan({super.key});
@@ -187,39 +160,6 @@ class _IsiLaporanState extends State<IsiLaporan> {
                 ),
         ),
       ]);
-}
-
-/// Grafik batang sederhana penjualan per hari.
-class GrafikBatang extends StatelessWidget {
-  const GrafikBatang({super.key, required this.data});
-  final Map<DateTime, int> data;
-
-  @override
-  Widget build(BuildContext context) {
-    final maks = data.values.fold<int>(0, (a, b) => b > a ? b : a);
-    String singkat(int v) => v >= 1000000 ? '${(v / 1000000).toStringAsFixed(1).replaceAll('.', ',')} jt' : formatAngka(v);
-    return SizedBox(
-      height: 240,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        for (final e in data.entries)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                if (data.length <= 14) Text(singkat(e.value), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Container(
-                  height: maks == 0 ? 2 : 4 + 170 * e.value / maks,
-                  decoration: const BoxDecoration(color: Warna.hijau, borderRadius: BorderRadius.vertical(top: Radius.circular(6))),
-                ),
-                const SizedBox(height: 6),
-                Text('${keWib(e.key).day}', style: const TextStyle(fontSize: 13, color: Warna.teks2, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-      ]),
-    );
-  }
 }
 
 // ============================================================================ log aktivitas

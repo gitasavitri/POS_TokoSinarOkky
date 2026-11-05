@@ -3,7 +3,6 @@ import 'package:pos_core/pos_core.dart';
 
 import '../../data/model.dart';
 import '../../layanan/aplikasi.dart';
-import '../komponen/kerangka.dart';
 import '../komponen/pin.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';

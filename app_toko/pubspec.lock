@@ -338,6 +338,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  pos_ui:
+    dependency: "direct main"
+    description:
+      path: "../packages/pos_ui"
+      relative: true
+    source: path
+    version: "0.1.0"
   process:
     dependency: transitive
     description:

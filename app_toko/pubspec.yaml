@@ -39,6 +39,8 @@ dependencies:
   ffi: ^2.2.0
   pos_core:
     path: ../packages/pos_core
+  pos_ui:
+    path: ../packages/pos_ui
 
 dev_dependencies:
   flutter_test:

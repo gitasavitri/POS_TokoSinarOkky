@@ -29,3 +29,4 @@ Thumbs.db
 pubspec.lock.bak
 app_toko/test/gambar/
 !.env.contoh
+app_pusat/test/gambar/
