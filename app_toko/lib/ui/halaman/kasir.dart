@@ -32,13 +32,20 @@ class _HalamanKasirState extends State<HalamanKasir> {
   final _ditahan = <Keranjang>[];
   final _scan = TextEditingController();
   final _qty = TextEditingController(text: '1');
-  final _fokusScan = FocusNode();
+  late final _fokusScan = FocusNode(onKeyEvent: _tombolScan);
+  late final _fokusQty = FocusNode(onKeyEvent: _tombolQty);
   final _gulir = ScrollController();
   int? _barisDipilih;
   Timer? _jam;
 
   /// Transaksi yang baru selesai: kembaliannya tampil sampai barang berikutnya di-scan.
   ({HasilSimpanTransaksi hasil, bool mencetak, String? galatCetak})? _selesai;
+
+  /// Barang yang sedang diinput (sudah dikenali dari barcode/cari, belum masuk daftar).
+  BarangJual? _pilih;
+
+  /// Enter ditekan tapi barcode/nama tidak ditemukan.
+  bool _tidakKetemu = false;
   DateTime _sekarang = DateTime.now();
 
   @override
@@ -54,6 +61,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
     _scan.dispose();
     _qty.dispose();
     _fokusScan.dispose();
+    _fokusQty.dispose();
     _gulir.dispose();
     super.dispose();
   }
@@ -145,20 +153,133 @@ class _HalamanKasirState extends State<HalamanKasir> {
     _fokuskan();
   }
 
+  bool _ditekan(KeyEvent e, LogicalKeyboardKey k) => (e is KeyDownEvent || e is KeyRepeatEvent) && e.logicalKey == k;
+
+  void _keJumlah() {
+    _fokusQty.requestFocus();
+    _qty.selection = TextSelection(baseOffset: 0, extentOffset: _qty.text.length);
+  }
+
+  void _keBarcode() {
+    _fokusScan.requestFocus();
+    _scan.selection = TextSelection(baseOffset: 0, extentOffset: _scan.text.length);
+  }
+
+  /// ↓ di kolom Barcode pindah ke Jumlah.
+  KeyEventResult _tombolScan(FocusNode _, KeyEvent e) {
+    if (_ditekan(e, LogicalKeyboardKey.arrowDown)) {
+      _keJumlah();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// ↑ di kolom Jumlah kembali ke Barcode.
+  KeyEventResult _tombolQty(FocusNode _, KeyEvent e) {
+    if (_ditekan(e, LogicalKeyboardKey.arrowUp)) {
+      _keBarcode();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   void _fokuskan() => WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _fokusScan.requestFocus();
       });
 
-  int get _jumlahInput {
-    final n = bacaAngka(_qty.text);
-    return n <= 0 ? 1 : n;
+  /// Jumlah yang dipakai untuk pratinjau harga (1 kalau isian belum wajar).
+  int get _jumlahPratinjau => switch (cekJumlah(_qty.text)) {
+        CekJumlah.wajar || CekJumlah.perluKonfirmasi => int.parse(_qty.text.trim()),
+        _ => 1,
+      };
+
+  /// Barcode diketik: nama barang langsung muncul kalau kodenya cocok.
+  void _barcodeBerubah(String teks) {
+    final isi = teks.trim();
+    setState(() {
+      _tidakKetemu = false;
+      _pilih = isi.isEmpty ? null : app.katalog.untukKasirBarcode(isi, app.cabang.id);
+    });
   }
 
-  void _tambahBarang(BarangJual b) {
+  /// Barang dipilih (scan / cari): tampil di kotak input, kursor pindah ke Jumlah.
+  void _pilihBarang(BarangJual b, {bool isiKolom = false}) {
     setState(() {
       _tutupKartuSelesai();
-      _keranjang.tambah(b, qty: _jumlahInput);
+      _pilih = b;
+      _tidakKetemu = false;
+      if (isiKolom) _scan.text = b.barcode ?? b.nama;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keJumlah();
+    });
+  }
+
+  /// Enter di kolom Barcode.
+  Future<void> _prosesScan() async {
+    final isi = _scan.text.trim();
+    if (isi.isEmpty) return;
+    final b = app.katalog.untukKasirBarcode(isi, app.cabang.id);
+    if (b != null) return _pilihBarang(b);
+    final hasil = app.katalog.cari(isi, app.cabang.id, batas: 30).where((d) => d.untukDijual != null).toList();
+    if (hasil.length == 1) return _pilihBarang(hasil.single.untukDijual!, isiKolom: true);
+    if (hasil.isEmpty) {
+      setState(() {
+        _pilih = null;
+        _tidakKetemu = true;
+      });
+      _keBarcode();
+      return;
+    }
+    await _cari(awal: isi);
+  }
+
+  Future<void> _cari({String awal = ''}) async {
+    final b = await cariBarangDialog(context, awal: awal);
+    if (b != null) {
+      _pilihBarang(b, isiKolom: true);
+    } else {
+      _fokuskan();
+    }
+  }
+
+  /// Enter di kolom Jumlah / tombol Tambah: masukkan barang yang tampil di kotak input ke daftar belanja.
+  Future<void> _masukkan() async {
+    final b = _pilih;
+    if (b == null) {
+      if (_scan.text.trim().isNotEmpty) return _prosesScan();
+      return _fokuskan();
+    }
+    switch (cekJumlah(_qty.text)) {
+      case CekJumlah.kosong:
+        tampilkanPesan(context, 'Isi jumlah dulu (minimal 1).', galat: true);
+        return _keJumlah();
+      case CekJumlah.miripBarcode:
+        // Kasir lupa Enter, lalu barcode barang berikutnya ter-scan ke kolom Jumlah.
+        _qty.text = '1';
+        tampilkanPesan(context, 'Angka di kolom Jumlah terlalu panjang, sepertinya barcode ter-scan ke kolom Jumlah. '
+            '${b.nama} belum ditambahkan: cek jumlahnya lalu tekan Enter.', galat: true);
+        setState(() {});
+        return _keJumlah();
+      case CekJumlah.perluKonfirmasi:
+        final n = int.parse(_qty.text.trim());
+        final ok = await konfirmasi(context,
+            judul: 'Jumlahnya benar?', isi: '${formatAngka(n)} ${b.satuan} ${b.nama}. Jumlah sebesar ini jarang terjadi.', ya: 'Ya, benar', batal: 'Ubah jumlah');
+        if (!mounted) return;
+        if (!ok) return _keJumlah();
+      case CekJumlah.wajar:
+        break;
+    }
+    _tambahBarang(b, int.parse(_qty.text.trim()));
+  }
+
+  void _tambahBarang(BarangJual b, int qty) {
+    setState(() {
+      _tutupKartuSelesai();
+      _keranjang.tambah(b, qty: qty);
       _barisDipilih = _keranjang.barisTerakhir;
+      _pilih = null;
+      _tidakKetemu = false;
       _qty.text = '1';
       _scan.clear();
     });
@@ -170,37 +291,6 @@ class _HalamanKasirState extends State<HalamanKasir> {
       }
     });
     _fokuskan();
-  }
-
-  Future<void> _prosesScan() async {
-    final isi = _scan.text.trim();
-    if (isi.isEmpty) return;
-    final b = app.katalog.untukKasirBarcode(isi, app.cabang.id);
-    if (b != null) {
-      _tambahBarang(b);
-      return;
-    }
-    final hasil = app.katalog.cari(isi, app.cabang.id, batas: 30).where((d) => d.untukDijual != null).toList();
-    if (hasil.length == 1) {
-      _tambahBarang(hasil.single.untukDijual!);
-      return;
-    }
-    if (hasil.isEmpty) {
-      tampilkanPesan(context, 'Barang "$isi" tidak ditemukan di toko ini.', galat: true);
-      _scan.selection = TextSelection(baseOffset: 0, extentOffset: _scan.text.length);
-      _fokuskan();
-      return;
-    }
-    await _cari(awal: isi);
-  }
-
-  Future<void> _cari({String awal = ''}) async {
-    final b = await cariBarangDialog(context, awal: awal);
-    if (b != null) {
-      _tambahBarang(b);
-    } else {
-      _fokuskan();
-    }
   }
 
   Future<void> _batalkanKeranjang() async {
@@ -348,6 +438,151 @@ class _HalamanKasirState extends State<HalamanKasir> {
     _fokuskan();
   }
 
+  // ------------------------------------------------------------ kotak input barang
+
+  static const _gayaIsian = TextStyle(fontSize: 17, fontWeight: FontWeight.w600);
+
+  InputDecoration _hiasIsian({String? petunjuk}) => InputDecoration(
+        hintText: petunjuk,
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        enabledBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)), borderSide: BorderSide(color: Warna.garis, width: 1.5)),
+        focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)), borderSide: BorderSide(color: Warna.utama, width: 2.5)),
+      );
+
+  Widget _barisInput(String label, Widget isi) => Row(children: [
+        SizedBox(width: 112, child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Warna.teks2))),
+        Expanded(child: isi),
+      ]);
+
+  /// Kotak isian yang hanya ditampilkan (nama, harga, subtotal).
+  Widget _kotakBaca({required Widget isi, Color latar = Warna.abuMuda, Color garis = Warna.garisTipis, Key? key}) => Container(
+        key: key,
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(color: latar, borderRadius: BorderRadius.circular(7), border: Border.all(color: garis, width: 1.5)),
+        alignment: Alignment.centerLeft,
+        child: isi,
+      );
+
+  Widget _kotakInput() {
+    final b = _pilih;
+    final teks = _scan.text.trim();
+    final Widget nama;
+    if (b != null) {
+      nama = _kotakBaca(
+        key: const ValueKey('nama-barang'),
+        latar: Warna.suksesMuda,
+        garis: const Color(0xFF8FD3AC),
+        isi: Row(children: [
+          Flexible(child: Text(b.nama, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+          const SizedBox(width: 8),
+          const Icon(Icons.check, size: 20, color: Warna.suksesTua),
+        ]),
+      );
+    } else if (_tidakKetemu) {
+      nama = _kotakBaca(
+        key: const ValueKey('nama-barang'),
+        latar: Warna.merahMuda,
+        garis: Warna.merahGaris,
+        isi: const Text.rich(
+          TextSpan(children: [
+            TextSpan(text: 'Barang tidak ditemukan', style: TextStyle(fontWeight: FontWeight.w800)),
+            TextSpan(text: ' · F2 untuk cari nama'),
+          ]),
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 16, color: Warna.merah),
+        ),
+      );
+    } else {
+      nama = _kotakBaca(
+        key: const ValueKey('nama-barang'),
+        latar: Colors.white,
+        garis: Warna.garis,
+        isi: Text(
+          teks.isEmpty ? 'Muncul otomatis setelah barcode diketik' : 'Tekan Enter untuk mencari "$teks"',
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15.5, color: Warna.teksPudar),
+        ),
+      );
+    }
+
+    final h = b == null ? null : hitungHargaBaris(b.harga, _jumlahPratinjau);
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), boxShadow: Warna.bayangan),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Warna.garis, width: 1.5)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Row(children: [
+            Expanded(child: Text('INPUT BARANG', style: _gayaLabel)),
+            Text('↓ ↑ pindah kolom · Enter lanjut', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Warna.teksPudar)),
+          ]),
+          _barisInput(
+            'Barcode',
+            TextField(
+              key: const ValueKey('scan'),
+              controller: _scan,
+              focusNode: _fokusScan,
+              autofocus: true,
+              style: const TextStyle(fontFamily: fontMono, fontSize: 17, fontWeight: FontWeight.w700),
+              decoration: _hiasIsian(petunjuk: 'Scan atau ketik barcode / nama barang'),
+              onChanged: _barcodeBerubah,
+              onSubmitted: (_) => _prosesScan(),
+            ),
+          ),
+          _barisInput('Nama barang', nama),
+          _barisInput(
+            'Jumlah',
+            Row(children: [
+              SizedBox(
+                width: 110,
+                child: TextField(
+                  key: const ValueKey('jumlah'),
+                  controller: _qty,
+                  focusNode: _fokusQty,
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(14)],
+                  style: _gayaIsian.copyWith(fontWeight: FontWeight.w800),
+                  decoration: _hiasIsian(),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _masukkan(),
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Text('Harga', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Warna.teks2)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _kotakBaca(
+                  isi: Row(children: [
+                    Expanded(child: Text(h == null ? '–' : formatRupiah(h.hargaSatuan), style: _gayaIsian.copyWith(fontWeight: FontWeight.w800))),
+                    if (h != null && h.isGrosir) const Lencana('GROSIR', latar: Warna.oranyeMuda, warna: Warna.oranye),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+          _barisInput(
+            'Subtotal',
+            _kotakBaca(
+              isi: Row(children: [
+                Expanded(
+                  child: Text(h == null ? '' : '${formatAngka(h.qty)} × ${formatRupiah(h.hargaSatuan)}',
+                      overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, color: Warna.teksPudar)),
+                ),
+                Text(h == null ? '–' : formatRupiah(h.subtotal),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Warna.utamaTua)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cabang = app.cabang;
@@ -416,7 +651,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
           // ------------------------------------------------ tengah: daftar belanja / kartu kembalian
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
               child: _keranjang.kosong && _selesai != null
                   ? Container(
                       decoration: BoxDecoration(
@@ -492,101 +727,73 @@ class _HalamanKasirState extends State<HalamanKasir> {
                     ),
             ),
           ),
-          // ------------------------------------------------ bawah: scan + tombol
-          Container(
-            decoration: const BoxDecoration(
-              color: Warna.latarTerang,
-              border: Border(top: BorderSide(color: Warna.garis, width: 1.5)),
-              boxShadow: [BoxShadow(color: Color(0x1A0D47A1), blurRadius: 10, offset: Offset(0, -3))],
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(
-                flex: 5,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('SCAN BARCODE / KETIK NAMA BARANG', style: _gayaLabel),
-                  const SizedBox(height: 6),
-                  TextField(
-                    key: const ValueKey('scan'),
-                    controller: _scan,
-                    focusNode: _fokusScan,
-                    autofocus: true,
-                    style: const TextStyle(fontSize: 24),
-                    decoration: const InputDecoration(
-                      hintText: 'Arahkan scanner ke barcode…',
-                      filled: true,
-                      fillColor: Colors.white,
-                      prefixIcon: Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Icon(Icons.qr_code_scanner, size: 32, color: Warna.utama)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Warna.utama, width: 3)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Warna.utamaTua, width: 3.5)),
+          // ------------------------------------------------ bawah: input barang + tombol
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: SizedBox(
+              height: 196,
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Expanded(flex: 9, child: _kotakInput()),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 11,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Expanded(
+                      flex: 4,
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Expanded(
+                          child: _TombolWarna(
+                            label: 'Tambah (Enter)',
+                            ikon: Icons.add,
+                            latar: Warna.utamaMuda,
+                            garis: Warna.utama,
+                            warna: Warna.utamaGelap,
+                            onTap: _masukkan,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _TombolWarna(
+                            label: 'Kosongkan',
+                            latar: Warna.merahMuda,
+                            garis: Warna.merahGaris,
+                            warna: Warna.merah,
+                            onTap: _keranjang.kosong ? null : _batalkanKeranjang,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _TombolWarna(
+                            label: 'Tahan (F8)',
+                            ikon: Icons.pause,
+                            latar: Warna.ambarTombol,
+                            garis: Warna.oranyeGaris,
+                            warna: Warna.oranyeTua,
+                            onTap: _keranjang.kosong ? null : _tahan,
+                          ),
+                        ),
+                      ]),
                     ),
-                    onSubmitted: (_) => _prosesScan(),
-                  ),
-                ]),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 120,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('JUMLAH', style: _gayaLabel),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _qty,
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(5)],
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
-                    decoration: const InputDecoration(filled: true, fillColor: Colors.white),
-                    onSubmitted: (_) => _fokuskan(),
-                  ),
-                ]),
-              ),
-              const SizedBox(width: 12),
-              _TombolWarna(
-                label: 'Tambah (Enter)',
-                ikon: Icons.add,
-                latar: Warna.utamaMuda,
-                garis: Warna.utama,
-                warna: Warna.utamaGelap,
-                onTap: _prosesScan,
-              ),
-              const SizedBox(width: 12),
-              _TombolWarna(
-                label: 'Kosongkan',
-                latar: Warna.merahMuda,
-                garis: Warna.merahGaris,
-                warna: Warna.merah,
-                onTap: _keranjang.kosong ? null : _batalkanKeranjang,
-              ),
-              const SizedBox(width: 10),
-              _TombolWarna(
-                label: 'Tahan (F8)',
-                ikon: Icons.pause,
-                latar: Warna.ambarTombol,
-                garis: Warna.oranyeGaris,
-                warna: Warna.oranyeTua,
-                onTap: _keranjang.kosong ? null : _tahan,
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 64,
-                width: 250,
-                child: FilledButton.icon(
-                  onPressed: _keranjang.kosong ? null : _bayar,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Warna.sukses,
-                    disabledBackgroundColor: Warna.abuMuda,
-                    disabledForegroundColor: Warna.teksPudar,
-                    elevation: _keranjang.kosong ? 0 : 3,
-                    shadowColor: Warna.suksesTua,
-                  ),
-                  icon: const Icon(Icons.payments, size: 30),
-                  label: const Text('BAYAR (F12)', style: TextStyle(fontSize: 24)),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      flex: 5,
+                      child: FilledButton.icon(
+                        onPressed: _keranjang.kosong ? null : _bayar,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Warna.sukses,
+                          disabledBackgroundColor: Warna.abuMuda,
+                          disabledForegroundColor: Warna.teksPudar,
+                          elevation: _keranjang.kosong ? 0 : 3,
+                          shadowColor: Warna.suksesTua,
+                        ),
+                        icon: const Icon(Icons.payments, size: 32),
+                        label: const Text('BAYAR (F12)', style: TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                  ]),
                 ),
-              ),
-            ]),
+              ]),
+            ),
           ),
           // ------------------------------------------------ paling bawah: pintasan & menu
           Container(
@@ -596,7 +803,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
               const Expanded(
                 child: Wrap(spacing: 14, runSpacing: 4, children: [
                   _Pintasan('F2', 'Cari'),
-                  _Pintasan('F8', 'Tahan'),
+                  _Pintasan('↓ ↑', 'Pindah kolom'),
                   _Pintasan('F9', 'Terakhir'),
                   _Pintasan('Del', 'Hapus baris'),
                 ]),
@@ -843,7 +1050,7 @@ class _TombolWarna extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18),
     );
     return SizedBox(
-      height: 64,
+      height: double.infinity,
       child: ikon == null
           ? OutlinedButton(onPressed: onTap, style: gaya, child: Text(label))
           : OutlinedButton.icon(onPressed: onTap, style: gaya, icon: Icon(ikon, size: 24), label: Text(label)),

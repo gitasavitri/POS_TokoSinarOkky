@@ -150,6 +150,45 @@ void main() {
     s.app.keluar();
   });
 
+  testWidgets('kasir: panah → ke Jumlah, ↑/↓ ubah jumlah, ← dan Enter kembali ke scan', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    EditableText ketik(String kunci) =>
+        t.widget<EditableText>(find.descendant(of: find.byKey(ValueKey(kunci)), matching: find.byType(EditableText)));
+    bool fokus(String kunci) => ketik(kunci).focusNode.hasFocus;
+
+    expect(fokus('scan'), isTrue);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pump();
+    expect(fokus('jumlah'), isTrue, reason: '→ dari kolom scan pindah ke Jumlah');
+    expect(ketik('jumlah').controller.selection.textInside('1'), '1', reason: 'angka terpilih supaya bisa langsung diketik');
+
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await t.pump();
+    expect(ketik('jumlah').controller.text, '2');
+
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await t.pump();
+    expect(fokus('scan'), isTrue, reason: '← dari Jumlah kembali ke scan');
+
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text(formatRupiah(8000)), findsWidgets, reason: 'Sabun 2 × Rp4.000');
+
+    // Ketik jumlah lalu Enter → kembali ke scan.
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pump();
+    await t.enterText(find.byKey(const ValueKey('jumlah')), '5');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump();
+    expect(fokus('scan'), isTrue);
+    s.app.keluar();
+  });
+
   testWidgets('kasir: uang pas tetap menampilkan kembalian Rp 0', (t) async {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.kasir);

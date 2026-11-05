@@ -96,3 +96,37 @@ class Keranjang {
     return k;
   }
 }
+
+// ---------------------------------------------------------------- isian jumlah di layar kasir
+
+/// Hasil pemeriksaan kolom Jumlah sebelum barang dimasukkan ke daftar belanja.
+enum CekJumlah {
+  /// Boleh langsung ditambahkan.
+  wajar,
+
+  /// Kosong atau 0.
+  kosong,
+
+  /// Jumlah besar (≥ [batasKonfirmasiJumlah]): minta kasir memastikan dulu.
+  perluKonfirmasi,
+
+  /// Panjangnya seperti barcode: kemungkinan barcode barang berikutnya ter-scan ke kolom Jumlah
+  /// karena kasir lupa menekan Enter. Ditolak.
+  miripBarcode,
+}
+
+/// Jumlah sebesar ini atau lebih perlu dikonfirmasi kasir.
+const batasKonfirmasiJumlah = 1000;
+
+/// Jumlah dengan angka sebanyak ini atau lebih dianggap barcode yang salah masuk.
+const panjangMiripBarcode = 6;
+
+CekJumlah cekJumlah(String teks) {
+  final angka = teks.trim();
+  if (angka.isEmpty || !RegExp(r'^\d+$').hasMatch(angka)) return CekJumlah.kosong;
+  if (angka.length >= panjangMiripBarcode) return CekJumlah.miripBarcode;
+  final n = int.parse(angka);
+  if (n <= 0) return CekJumlah.kosong;
+  if (n >= batasKonfirmasiJumlah) return CekJumlah.perluKonfirmasi;
+  return CekJumlah.wajar;
+}

@@ -128,4 +128,29 @@ void main() {
       expect(() => nomorTransaksi(kodeCabang: 'A01', waktu: t, urut: 10000), throwsRangeError);
     });
   });
+
+  group('cekJumlah (kolom Jumlah di layar kasir)', () {
+    test('jumlah biasa boleh', () {
+      expect(cekJumlah('1'), CekJumlah.wajar);
+      expect(cekJumlah('12'), CekJumlah.wajar);
+      expect(cekJumlah('999'), CekJumlah.wajar);
+      expect(cekJumlah(' 24 '), CekJumlah.wajar);
+    });
+    test('kosong, 0, atau bukan angka ditolak', () {
+      expect(cekJumlah(''), CekJumlah.kosong);
+      expect(cekJumlah('0'), CekJumlah.kosong);
+      expect(cekJumlah('00'), CekJumlah.kosong);
+      expect(cekJumlah('-3'), CekJumlah.kosong);
+      expect(cekJumlah('1,5'), CekJumlah.kosong);
+    });
+    test('1.000 sampai 99.999 perlu konfirmasi', () {
+      expect(cekJumlah('1000'), CekJumlah.perluKonfirmasi);
+      expect(cekJumlah('99999'), CekJumlah.perluKonfirmasi);
+    });
+    test('angka sepanjang barcode dianggap barcode yang ter-scan ke kolom Jumlah', () {
+      expect(cekJumlah('100000'), CekJumlah.miripBarcode);
+      expect(cekJumlah('8990003'), CekJumlah.miripBarcode);
+      expect(cekJumlah('8991234567890'), CekJumlah.miripBarcode);
+    });
+  });
 }
