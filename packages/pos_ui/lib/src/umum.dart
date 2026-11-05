@@ -15,12 +15,15 @@ class Panel extends StatelessWidget {
   final Color? warnaKepala;
 
   @override
-  Widget build(BuildContext context) => Material(
+  Widget build(BuildContext context) => DecoratedBox(
+        // Bayangan supaya batas antarbagian jelas.
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), boxShadow: Warna.bayangan),
+        child: Material(
         // Material (bukan DecoratedBox) supaya efek klik ListTile/InkWell di dalamnya tetap terlihat.
         color: Colors.white,
         shape: RoundedRectangleBorder(
-          side: const BorderSide(color: Warna.garis, width: 2),
-          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: Warna.garis, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -29,16 +32,20 @@ class Panel extends StatelessWidget {
           children: [
             if (judul != null)
               Container(
-                color: warnaKepala ?? Warna.kepalaTabel,
+                decoration: BoxDecoration(
+                  color: warnaKepala ?? Warna.utamaMuda,
+                  border: const Border(bottom: BorderSide(color: Warna.utamaGarisMuda, width: 2)),
+                ),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 child: Row(children: [
-                  Expanded(child: Text(judul!, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+                  Expanded(child: Text(judul!, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Warna.utamaTua))),
                   ?aksi,
                 ]),
               ),
             Padding(padding: padding, child: child),
           ],
         ),
+      ),
       );
 }
 
@@ -54,7 +61,7 @@ class LabelKecil extends StatelessWidget {
 
 /// Lencana status kecil.
 class Lencana extends StatelessWidget {
-  const Lencana(this.teks, {super.key, this.latar = Warna.hijauMuda, this.warna = Warna.hijauGelap});
+  const Lencana(this.teks, {super.key, this.latar = Warna.utamaMuda, this.warna = Warna.utamaGelap});
 
   factory Lencana.status(String teks) {
     switch (teks) {
@@ -67,7 +74,7 @@ class Lencana extends StatelessWidget {
       case 'Menipis':
       case 'Menunggu':
       case 'menunggu':
-        return Lencana(teks, latar: Warna.oranyeMuda, warna: Warna.oranye);
+        return Lencana(teks, latar: Warna.oranyeMuda, warna: Warna.oranyeTua);
       case 'Dibatalkan':
       case 'Batal':
       case 'Rusak':
@@ -77,7 +84,13 @@ class Lencana extends StatelessWidget {
         return Lencana(teks, latar: Warna.merahMuda, warna: Warna.merah);
       case 'Stok masuk saja':
       case 'Nonaktif':
-        return Lencana(teks, latar: const Color(0xFFE4E9E6), warna: const Color(0xFF2F3A36));
+        return Lencana(teks, latar: Warna.abuIkonMuda, warna: Warna.abuIkon);
+      case 'Aktif':
+      case 'Aman':
+      case 'Lunas':
+      case 'disetujui':
+      case 'Disetujui':
+        return Lencana(teks, latar: Warna.suksesMuda, warna: Warna.suksesTua);
       default:
         return Lencana(teks);
     }
@@ -97,30 +110,61 @@ class Lencana extends StatelessWidget {
 
 /// Kotak angka ringkasan (laporan/dashboard).
 class KartuAngka extends StatelessWidget {
-  const KartuAngka({super.key, required this.label, required this.nilai, this.catatan, this.latar = Colors.white, this.warna = Warna.teks});
+  const KartuAngka(
+      {super.key, required this.label, required this.nilai, this.catatan, this.latar = Colors.white, this.warna = Warna.teks, this.aksen, this.ikon});
   final String label;
   final String nilai;
   final String? catatan;
   final Color latar;
   final Color warna;
 
+  /// Warna garis kiri + ikon (supaya tiap kartu mudah dibedakan).
+  final Color? aksen;
+  final IconData? ikon;
+
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(color: latar, borderRadius: BorderRadius.circular(12), border: Border.all(color: Warna.garisTipis, width: 1.5)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Warna.teks2)),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(nilai, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: warna)),
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), boxShadow: Warna.bayangan),
+        child: Container(
+          decoration: BoxDecoration(color: latar, borderRadius: BorderRadius.circular(12), border: Border.all(color: Warna.garis, width: 1.5)),
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (aksen != null) Container(width: 6, color: aksen),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(children: [
+                    if (ikon != null) ...[
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(color: (aksen ?? Warna.utama).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                        child: Icon(ikon, color: aksen ?? Warna.utama, size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                    ],
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Warna.teksPudar)),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(nilai, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: warna)),
+                        ),
+                        if (catatan != null) ...[
+                          const SizedBox(height: 4),
+                          Text(catatan!, style: const TextStyle(fontSize: 14, color: Warna.teksPudar, fontWeight: FontWeight.w600)),
+                        ],
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
+            ]),
           ),
-          if (catatan != null) ...[
-            const SizedBox(height: 4),
-            Text(catatan!, style: const TextStyle(fontSize: 14, color: Warna.teksPudar, fontWeight: FontWeight.w600)),
-          ],
-        ]),
+        ),
       );
 }
 
@@ -136,7 +180,7 @@ class KotakPesan extends StatelessWidget {
     final (latar, warna, ik) = switch (jenis) {
       JenisPesan.perhatian => (Warna.oranyeMuda, Warna.oranyeTua, Icons.lock_outline),
       JenisPesan.galat => (Warna.merahMuda, Warna.merahTua, Icons.error_outline),
-      JenisPesan.berhasil => (Warna.hijauMuda, Warna.hijauGelap, Icons.check_circle_outline),
+      JenisPesan.berhasil => (Warna.utamaMuda, Warna.utamaGelap, Icons.check_circle_outline),
       JenisPesan.info => (Warna.abuMuda, Warna.teks2, Icons.info_outline),
     };
     return Container(
@@ -265,7 +309,7 @@ void tampilkanPesan(BuildContext context, String teks, {bool galat = false}) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
       content: Text(teks),
-      backgroundColor: galat ? Warna.merah : Warna.hijauTua,
+      backgroundColor: galat ? Warna.merah : Warna.utamaTua,
       duration: Duration(seconds: galat ? 6 : 3),
       showCloseIcon: true,
     ));

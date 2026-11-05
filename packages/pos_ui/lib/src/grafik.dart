@@ -24,7 +24,7 @@ class GrafikBatang extends StatelessWidget {
                 const SizedBox(height: 4),
                 Container(
                   height: maks == 0 ? 2 : 4 + 170 * e.value / maks,
-                  decoration: const BoxDecoration(color: Warna.hijau, borderRadius: BorderRadius.vertical(top: Radius.circular(6))),
+                  decoration: const BoxDecoration(color: Warna.utama, borderRadius: BorderRadius.vertical(top: Radius.circular(6))),
                 ),
                 const SizedBox(height: 6),
                 Text('${keWib(e.key).day}', style: const TextStyle(fontSize: 13, color: Warna.teks2, fontWeight: FontWeight.w600)),

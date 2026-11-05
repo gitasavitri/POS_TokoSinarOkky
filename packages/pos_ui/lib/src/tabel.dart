@@ -27,16 +27,16 @@ class TabelSederhana extends StatelessWidget {
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
-        color: Warna.kepalaTabel,
+        decoration: const BoxDecoration(color: Warna.utamaMuda, border: Border(bottom: BorderSide(color: Warna.utamaGarisMuda, width: 2))),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(children: [
           for (var i = 0; i < kolom.length; i++)
-            sel(Text(kolom[i].toUpperCase(), style: const TextStyle(fontSize: 13.5, letterSpacing: 0.5, fontWeight: FontWeight.w800, color: Warna.teks2)), i),
+            sel(Text(kolom[i].toUpperCase(), style: const TextStyle(fontSize: 13.5, letterSpacing: 0.5, fontWeight: FontWeight.w800, color: Warna.utamaTua)), i),
         ]),
       ),
       for (var r = 0; r < baris.length; r++)
         Material(
-          color: r == sorot ? Warna.hijauSorot : (r.isOdd ? Warna.baris2 : Colors.white),
+          color: r == sorot ? Warna.utamaSorot : (r.isOdd ? Warna.baris2 : Colors.white),
           child: InkWell(
             onTap: onTap == null ? null : () => onTap!(r),
             child: Container(

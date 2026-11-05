@@ -148,7 +148,7 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
                 decoration: const InputDecoration(
                   labelText: 'Scan / cari barang yang harganya berubah',
                   hintText: 'Scan barcode atau ketik nama barang, lalu Enter',
-                  prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.hijau),
+                  prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.utama),
                 ),
                 onSubmitted: (_) => _cariScan(),
               ),
@@ -186,7 +186,7 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
                   const SizedBox(height: 10),
                   FilledButton(
                     onPressed: _dipilihLabel.isEmpty ? null : _cetakLabel,
-                    style: FilledButton.styleFrom(backgroundColor: Warna.hijauTua),
+                    style: FilledButton.styleFrom(backgroundColor: Warna.utamaTua),
                     child: Text('Cetak label rak (${_dipilihLabel.length})'),
                   ),
                 ],
@@ -222,7 +222,7 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
     final perluPin = cek?.perluPinSpv == true && !bolehMenyetujui(app.penggunaAktif!.peran);
     final (latar, warna) = _hargaBaru == lama || _hargaBaru == 0
         ? (Warna.abuMuda, Warna.teks2)
-        : (cek!.perluPinSpv ? (Warna.merahMuda, Warna.merahTua) : (_hargaBaru > lama ? (Warna.hijauMuda, Warna.hijauGelap) : (Warna.oranyeMuda, Warna.oranyeTua)));
+        : (cek!.perluPinSpv ? (Warna.merahMuda, Warna.merahTua) : (_hargaBaru > lama ? (Warna.utamaMuda, Warna.utamaGelap) : (Warna.oranyeMuda, Warna.oranyeTua)));
     final salahGrosir = periksaTingkatGrosir(eceran: _hargaBaru, hpp: b.hpp, tingkat: _tingkat);
     final untung = _hargaBaru - (b.hpp ?? 0);
 
@@ -265,11 +265,11 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
             ])),
             if (_hargaBaru > 0 && b.hpp != null)
               Text(untung > 0 ? 'Untung per ${b.satuan}: ${formatRupiah(untung)}' : 'Rugi per ${b.satuan}: ${formatRupiah(-untung)}',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: untung > 0 ? const Color(0xFF0A6B44) : Warna.merah)),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: untung > 0 ? Warna.suksesTua : Warna.merah)),
           ]),
         ),
         const SizedBox(height: 16),
-        const LabelKecil('Harga grosir', warna: Warna.hijauGelap),
+        const LabelKecil('Harga grosir', warna: Warna.utamaGelap),
         const SizedBox(height: 10),
         for (var i = 0; i < _grosir.length; i++)
           Padding(

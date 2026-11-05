@@ -84,7 +84,7 @@ class _IsiReturState extends State<IsiRetur> {
                 decoration: const InputDecoration(
                   labelText: 'Scan barcode di struk atau ketik nomor transaksi',
                   hintText: 'contoh: TRX-A01-261105-0001',
-                  prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.hijau),
+                  prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.utama),
                 ),
                 onSubmitted: (_) => _cari(),
               ),

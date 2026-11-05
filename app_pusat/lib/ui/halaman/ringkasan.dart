@@ -40,11 +40,11 @@ class _IsiRingkasanState extends State<IsiRingkasan> {
           ]),
           const SizedBox(height: 18),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: KartuAngka(label: 'Penjualan bersih', nilai: formatRupiah(t.penjualanBersih), catatan: 'setelah dikurangi retur')),
+            Expanded(child: KartuAngka(label: 'Penjualan bersih', nilai: formatRupiah(t.penjualanBersih), catatan: 'setelah dikurangi retur', aksen: Warna.sukses, ikon: Icons.payments)),
             const SizedBox(width: 14),
-            Expanded(child: KartuAngka(label: 'Jumlah transaksi', nilai: formatAngka(t.jumlahTransaksi), catatan: 'rata-rata ${formatRupiah(t.rataRataStruk)}')),
+            Expanded(child: KartuAngka(label: 'Jumlah transaksi', nilai: formatAngka(t.jumlahTransaksi), catatan: 'rata-rata ${formatRupiah(t.rataRataStruk)}', aksen: Warna.utama, ikon: Icons.receipt_long)),
             const SizedBox(width: 14),
-            Expanded(child: KartuAngka(label: 'Laba kotor', nilai: formatRupiah(t.labaKotor), catatan: 'harga jual − HPP')),
+            Expanded(child: KartuAngka(label: 'Laba kotor', nilai: formatRupiah(t.labaKotor), catatan: 'harga jual − HPP', aksen: Warna.ungu, ikon: Icons.trending_up)),
             const SizedBox(width: 14),
             Expanded(
               child: KartuAngka(
@@ -52,6 +52,8 @@ class _IsiRingkasanState extends State<IsiRingkasan> {
                 nilai: '${t.jumlahBatal} batal',
                 catatan: 'retur ${formatRupiah(t.totalRetur)}',
                 latar: t.jumlahBatal > 0 ? Warna.oranyeMuda : Colors.white,
+                aksen: Warna.merahIkon,
+                ikon: Icons.assignment_return,
               ),
             ),
           ]),
@@ -109,7 +111,7 @@ class _IsiRingkasanState extends State<IsiRingkasan> {
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(children: [
-                              CircleAvatar(radius: 15, backgroundColor: Warna.hijauMuda, child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, color: Warna.hijauGelap))),
+                              CircleAvatar(radius: 15, backgroundColor: Warna.utamaMuda, child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, color: Warna.utamaGelap))),
                               const SizedBox(width: 12),
                               Expanded(child: Text(b.nama, style: const TextStyle(fontSize: 17))),
                               Text('${formatAngka(b.qty)} terjual', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),

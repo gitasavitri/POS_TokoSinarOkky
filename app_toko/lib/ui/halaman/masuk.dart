@@ -77,23 +77,25 @@ class _HalamanMasukState extends State<HalamanMasuk> {
       body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           width: 460,
-          color: Warna.hijauTua,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Warna.utamaTua, Warna.utama, Warna.utamaTerang]),
+          ),
           padding: const EdgeInsets.fromLTRB(48, 56, 48, 40),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
               width: 64,
               height: 64,
-              decoration: BoxDecoration(color: Warna.hijauMuda, borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.shopping_cart_outlined, size: 36, color: Warna.hijauTua),
+              decoration: BoxDecoration(color: Warna.utamaMuda, borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.shopping_cart_outlined, size: 36, color: Warna.utamaTua),
             ),
             const SizedBox(height: 20),
             Text(cabang.namaToko, style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, height: 1.1)),
             const SizedBox(height: 8),
-            const Text('Kasir minimarket & grosir', style: TextStyle(color: Color(0xFFCFE3DA), fontSize: 20)),
+            const Text('Kasir minimarket & grosir', style: TextStyle(color: Warna.utamaTeksTerang, fontSize: 20)),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(color: Warna.hijauPanel, borderRadius: BorderRadius.circular(10), border: Border.all(color: Warna.hijauGaris)),
+              decoration: BoxDecoration(color: Warna.utamaPanel, borderRadius: BorderRadius.circular(10), border: Border.all(color: Warna.utamaGaris)),
               child: Text('Cabang ${cabang.nama} · ${cabang.kode}',
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
             ),
@@ -112,8 +114,8 @@ class _HalamanMasukState extends State<HalamanMasuk> {
                       margin: const EdgeInsets.only(top: 8, right: 12),
                       width: 10,
                       height: 10,
-                      decoration: const BoxDecoration(color: Color(0xFF7FD1AE), shape: BoxShape.circle)),
-                  Expanded(child: Text(t, style: const TextStyle(color: Color(0xFFE6F0EB), fontSize: 17.5, height: 1.45))),
+                      decoration: const BoxDecoration(color: Color(0xFF9ED0FF), shape: BoxShape.circle)),
+                  Expanded(child: Text(t, style: const TextStyle(color: Color(0xFFEAF4FF), fontSize: 17.5, height: 1.45))),
                 ]),
               ),
           ]),

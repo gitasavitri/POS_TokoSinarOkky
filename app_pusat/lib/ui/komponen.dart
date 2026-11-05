@@ -92,8 +92,8 @@ class PilihPeriode extends StatelessWidget {
 (String, Color) statusSinkron(DateTime? t, DateTime sekarang) {
   if (t == null) return ('Belum pernah', Warna.merah);
   final d = sekarang.difference(t);
-  if (d.inMinutes < 1) return ('Baru saja', Warna.hijau);
-  if (d.inMinutes < 60) return ('${d.inMinutes} menit lalu', d.inMinutes <= 10 ? Warna.hijau : Warna.oranye);
+  if (d.inMinutes < 1) return ('Baru saja', Warna.suksesTua);
+  if (d.inMinutes < 60) return ('${d.inMinutes} menit lalu', d.inMinutes <= 10 ? Warna.suksesTua : Warna.oranye);
   if (d.inHours < 24) return ('${d.inHours} jam lalu', Warna.oranye);
   return ('${d.inDays} hari lalu', Warna.merah);
 }

@@ -119,7 +119,7 @@ class _IsiKaryawanState extends State<IsiKaryawan> {
   Widget build(BuildContext context) {
     final app = context.app;
     final saya = app.penggunaAktif!;
-    const y = Text('Ya', style: TextStyle(fontWeight: FontWeight.w800, color: Warna.hijauGelap, fontSize: 16));
+    const y = Text('Ya', style: TextStyle(fontWeight: FontWeight.w800, color: Warna.utamaGelap, fontSize: 16));
     const n = Text('—', style: TextStyle(color: Warna.teksPudar, fontSize: 16));
     const pin = Text('PIN SPV', style: TextStyle(fontWeight: FontWeight.w800, color: Warna.oranye, fontSize: 16));
     Widget sel(Akses a) => switch (a) { Akses.ya => y, Akses.pinSpv => pin, Akses.tidak => n };

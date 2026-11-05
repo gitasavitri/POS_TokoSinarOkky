@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:pos_core/pos_core.dart';
 import 'package:pos_ui/pos_ui.dart';
 
+import '../data/model.dart';
 import '../layanan/sesi.dart';
 import 'halaman/barang.dart';
 import 'halaman/karyawan.dart';
@@ -11,6 +12,7 @@ import 'halaman/ringkasan.dart';
 import 'halaman/stok.dart';
 import 'halaman/toko.dart';
 import 'halaman/transaksi.dart';
+import 'komponen.dart';
 
 class AplikasiPusat extends StatefulWidget {
   const AplikasiPusat({super.key, required this.sesi});
@@ -76,17 +78,19 @@ class _LayarDepan extends StatelessWidget {
         body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Container(
             width: 460,
-            color: Warna.hijauTua,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Warna.utamaTua, Warna.utama, Warna.utamaTerang]),
+            ),
             padding: const EdgeInsets.all(48),
             child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Icon(Icons.store_mall_directory_outlined, color: Colors.white, size: 56),
               SizedBox(height: 18),
               Text('Kantor Pusat', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, height: 1.1)),
               SizedBox(height: 8),
-              Text('Laporan semua toko, harga, dan perangkat', style: TextStyle(color: Warna.hijauTeksTerang, fontSize: 19)),
+              Text('Laporan semua toko, harga, dan perangkat', style: TextStyle(color: Warna.utamaTeksTerang, fontSize: 19)),
               Spacer(),
               Text('Aplikasi ini tidak dipakai untuk berjualan.\nData berasal dari PC kasir di setiap toko.',
-                  style: TextStyle(color: Warna.hijauTeksTerang, fontSize: 16, height: 1.5)),
+                  style: TextStyle(color: Warna.utamaTeksTerang, fontSize: 16, height: 1.5)),
             ]),
           ),
           Expanded(
@@ -222,19 +226,27 @@ class _HalamanMasukState extends State<HalamanMasuk> {
   }
 }
 
-enum MenuPusat {
-  ringkasan('Ringkasan semua toko', Icons.space_dashboard_outlined),
-  transaksi('Transaksi', Icons.receipt_long_outlined),
-  barang('Barang & harga', Icons.sell_outlined),
-  stok('Stok per toko', Icons.inventory_2_outlined),
-  toko('Toko & perangkat', Icons.storefront_outlined),
-  karyawan('Karyawan', Icons.badge_outlined),
-  log('Log aktivitas', Icons.history);
+enum GrupPusat { penjualan, barang, toko }
 
-  const MenuPusat(this.label, this.ikon);
+enum MenuPusat {
+  ringkasan('Ringkasan semua toko', Icons.space_dashboard, GrupPusat.penjualan, Warna.utama, Color(0xFFDCEBFC)),
+  transaksi('Transaksi', Icons.receipt_long, GrupPusat.penjualan, Warna.hijauIkon, Warna.hijauIkonMuda),
+  barang('Barang & harga', Icons.sell, GrupPusat.barang, Warna.coklat, Warna.coklatMuda),
+  stok('Stok per toko', Icons.inventory, GrupPusat.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
+  toko('Toko & perangkat', Icons.storefront, GrupPusat.toko, Warna.ungu, Warna.unguMuda),
+  karyawan('Karyawan', Icons.badge, GrupPusat.toko, Warna.toska, Warna.toskaMuda),
+  log('Log aktivitas', Icons.history, GrupPusat.toko, Warna.abuIkon, Warna.abuIkonMuda);
+
+  const MenuPusat(this.label, this.ikon, this.grup, this.warna, this.latar);
   final String label;
   final IconData ikon;
+  final GrupPusat grup;
+  final Color warna;
+  final Color latar;
 }
+
+/// Toko dianggap "mengirim data" kalau sinkron terakhir paling lama 10 menit lalu.
+bool tokoAktif(CabangPusat c, DateTime sekarang) => c.terakhirSinkron != null && sekarang.difference(c.terakhirSinkron!).inMinutes <= 10;
 
 class HalamanUtama extends StatefulWidget {
   const HalamanUtama({super.key});
@@ -243,12 +255,18 @@ class HalamanUtama extends StatefulWidget {
 }
 
 class _HalamanUtamaState extends State<HalamanUtama> {
-  MenuPusat _menu = MenuPusat.ringkasan;
+  /// null = menu ikon.
+  MenuPusat? _menu;
+
+  void _buka(MenuPusat? m) => setState(() => _menu = m);
 
   @override
   Widget build(BuildContext context) {
     final s = context.sesi;
-    final isi = switch (_menu) {
+    final nama = s.admin?.nama ?? '';
+    final m = _menu;
+    if (m == null) return _MenuUtama(nama: nama, onBuka: _buka, onKeluar: () => s.keluar());
+    final isi = switch (m) {
       MenuPusat.ringkasan => const IsiRingkasan(),
       MenuPusat.transaksi => const IsiTransaksi(),
       MenuPusat.barang => const IsiBarang(),
@@ -257,61 +275,91 @@ class _HalamanUtamaState extends State<HalamanUtama> {
       MenuPusat.karyawan => const IsiKaryawan(),
       MenuPusat.log => const IsiLog(),
     };
-    return Scaffold(
-      body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          width: 270,
-          color: Warna.hijauTua,
-          child: ListView(padding: const EdgeInsets.fromLTRB(14, 22, 14, 14), children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Text('KANTOR PUSAT', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): () => _buka(null)},
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: Warna.latar,
+          body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            BarKepala(
+              judul: m.label,
+              onMenu: () => _buka(null),
+              nama: nama,
+              keterangan: 'Kantor pusat · semua toko',
+              onKeluar: () => s.keluar(),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 18),
-              child: Text('Admin · ${s.admin?.nama ?? ''}', style: const TextStyle(color: Warna.hijauTeksTerang, fontSize: 15, height: 1.45)),
-            ),
-            for (final m in MenuPusat.values)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Material(
-                  color: m == _menu ? const Color(0xFF1E5A45) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => setState(() => _menu = m),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 50),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(children: [
-                          Icon(m.ikon, color: Colors.white, size: 22),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(m.label,
-                                style: TextStyle(color: Colors.white, fontSize: 16.5, fontWeight: m == _menu ? FontWeight.w800 : FontWeight.w500)),
-                          ),
-                        ]),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            Expanded(child: KeyedSubtree(key: ValueKey(m), child: isi)),
           ]),
         ),
+      ),
+    );
+  }
+}
+
+/// Menu ikon Aplikasi Pusat: ringkasan hari ini + ikon per kelompok.
+class _MenuUtama extends StatelessWidget {
+  const _MenuUtama({required this.nama, required this.onBuka, required this.onKeluar});
+  final String nama;
+  final ValueChanged<MenuPusat> onBuka;
+  final VoidCallback onKeluar;
+
+  @override
+  Widget build(BuildContext context) {
+    final sekarang = DateTime.now();
+    final (dari, sampai) = Periode.hariIni.rentang(sekarang);
+    return Scaffold(
+      backgroundColor: Warna.latar,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        BarKepala(judul: 'KANTOR PUSAT', sub: 'Laporan semua toko', nama: nama, keterangan: formatLayar(sekarang), onKeluar: onKeluar),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(28, 18, 20, 18),
-              child: Row(children: [
-                Expanded(child: Text(_menu.label, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800))),
-                OutlinedButton.icon(onPressed: () => s.keluar(), icon: const Icon(Icons.logout), label: const Text('Keluar')),
-              ]),
-            ),
-            const Divider(height: 2, thickness: 2, color: Warna.garisTipis),
-            Expanded(child: KeyedSubtree(key: ValueKey(_menu), child: isi)),
-          ]),
+          child: Muat<(RingkasanPusat, List<CabangPusat>)>(
+            ambil: (s) => s.pakai((api) async => (await api.ringkasan(dari, sampai), await api.cabang())),
+            isi: (context, d, ulang) {
+              final (r, cabang) = d;
+              final aktif = cabang.where((c) => tokoAktif(c, sekarang)).length;
+              final mati = cabang.length - aktif;
+              Widget ubin(MenuPusat m) => UbinMenu(
+                    ikon: m.ikon,
+                    label: m.label,
+                    warna: m.warna,
+                    latar: m.latar,
+                    utama: m == MenuPusat.ringkasan,
+                    lencana: m == MenuPusat.toko && mati > 0 ? '$mati offline' : null,
+                    onTap: () => onBuka(m),
+                  );
+              List<Widget> grup(GrupPusat g) => [for (final m in MenuPusat.values) if (m.grup == g) ubin(m)];
+              return ListView(padding: const EdgeInsets.fromLTRB(28, 18, 28, 24), children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: KartuAngka(
+                        label: 'Penjualan hari ini (semua toko)', nilai: formatRupiah(r.total.penjualanBersih), aksen: Warna.sukses, ikon: Icons.payments),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: KartuAngka(label: 'Transaksi', nilai: formatAngka(r.total.jumlahTransaksi), aksen: Warna.utama, ikon: Icons.receipt_long),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: KartuAngka(
+                      label: 'Toko mengirim data',
+                      nilai: cabang.isEmpty ? 'Belum ada toko' : '$aktif dari ${cabang.length}',
+                      warna: mati > 0 ? Warna.lencanaOranye : Warna.suksesTua,
+                      aksen: mati > 0 ? Warna.lencanaOranye : Warna.sukses,
+                      ikon: Icons.storefront,
+                      catatan: 'dalam 10 menit terakhir',
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                Wrap(spacing: 16, runSpacing: 16, children: [
+                  GrupMenu(judul: 'PENJUALAN', warna: Warna.utama, latar: const Color(0xFFF2F8FF), ubin: grup(GrupPusat.penjualan)),
+                  GrupMenu(judul: 'BARANG & HARGA', warna: Warna.toska, latar: const Color(0xFFF0FAFA), ubin: grup(GrupPusat.barang)),
+                  GrupMenu(judul: 'TOKO & ORANG', warna: Warna.ungu, latar: const Color(0xFFF6F2FD), ubin: grup(GrupPusat.toko)),
+                ]),
+              ]);
+            },
+          ),
         ),
       ]),
     );

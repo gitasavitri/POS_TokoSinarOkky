@@ -1,27 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pos_core/pos_core.dart';
 
 import '../../layanan/aplikasi.dart';
 import '../tema.dart';
+import 'umum.dart';
 
 
-/// Menu samping untuk halaman SPV/Admin.
+/// Kelompok ikon di menu SPV/Admin.
+enum GrupAdmin { penjualan, barang, laporan }
+
+/// Menu SPV/Admin (ditampilkan sebagai ikon-ikon di layar menu).
 enum MenuAdmin {
-  beranda('Beranda', Icons.space_dashboard_outlined),
-  penjualan('Buka layar kasir', Icons.point_of_sale),
-  barangMasuk('Barang masuk', Icons.inventory_2_outlined),
-  ubahHarga('Ubah harga', Icons.sell_outlined),
-  koreksi('Koreksi barang masuk', Icons.fact_check_outlined),
-  produk('Produk & stok', Icons.list_alt),
-  retur('Retur', Icons.assignment_return_outlined),
-  laporan('Laporan penjualan', Icons.bar_chart),
-  log('Log aktivitas', Icons.history),
-  karyawan('Karyawan', Icons.badge_outlined),
-  pengaturan('Pengaturan & printer', Icons.settings_outlined);
+  beranda('Menu', Icons.apps, GrupAdmin.penjualan, Warna.utama, Warna.utamaMuda),
+  penjualan('Transaksi', Icons.point_of_sale, GrupAdmin.penjualan, Warna.utama, Color(0xFFDCEBFC)),
+  retur('Retur', Icons.assignment_return, GrupAdmin.penjualan, Warna.merahIkon, Warna.merahIkonMuda),
+  barangMasuk('Barang masuk', Icons.local_shipping, GrupAdmin.barang, Warna.toska, Warna.toskaMuda),
+  ubahHarga('Ubah harga', Icons.sell, GrupAdmin.barang, Warna.coklat, Warna.coklatMuda),
+  koreksi('Koreksi barang masuk', Icons.fact_check, GrupAdmin.barang, Warna.ungu, Warna.unguMuda),
+  produk('Produk & stok', Icons.inventory_2, GrupAdmin.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
+  laporan('Laporan penjualan', Icons.bar_chart, GrupAdmin.laporan, Warna.utama, Color(0xFFDCEBFC)),
+  log('Log aktivitas', Icons.history, GrupAdmin.laporan, Warna.abuIkon, Warna.abuIkonMuda),
+  karyawan('Karyawan', Icons.badge, GrupAdmin.laporan, Warna.toska, Warna.toskaMuda),
+  pengaturan('Pengaturan & printer', Icons.print, GrupAdmin.laporan, Warna.abuIkon, Warna.abuIkonMuda);
 
-  const MenuAdmin(this.label, this.ikon);
+  const MenuAdmin(this.label, this.ikon, this.grup, this.warna, this.latar);
   final String label;
   final IconData ikon;
+  final GrupAdmin grup;
+  final Color warna;
+  final Color latar;
 
   bool bolehUntuk(Peran p) => switch (this) {
         MenuAdmin.karyawan => p == Peran.admin,
@@ -31,7 +39,7 @@ enum MenuAdmin {
 
 typedef BukaMenu = void Function(MenuAdmin menu);
 
-/// Kerangka halaman SPV/Admin: menu kiri hijau tua + isi.
+/// Kerangka halaman SPV/Admin: kepala biru dengan tombol "← Menu" (atau Esc) + isi selebar layar.
 class KerangkaAdmin extends StatelessWidget {
   const KerangkaAdmin({super.key, required this.aktif, required this.onMenu, required this.judul, this.aksi = const [], required this.child});
 
@@ -45,71 +53,24 @@ class KerangkaAdmin extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AplikasiScope.of(context, dengar: true);
     final p = app.penggunaAktif;
-    final cabang = app.cabang;
-    return Scaffold(
-      body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          width: 270,
-          color: Warna.hijauTua,
-          child: ListView(padding: const EdgeInsets.fromLTRB(14, 22, 14, 14), children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(cabang.namaToko, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): () => onMenu(MenuAdmin.beranda)},
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            BarKepala(
+              judul: judul,
+              onMenu: () => onMenu(MenuAdmin.beranda),
+              nama: p == null ? '' : '${p.nama} (${p.peran.label})',
+              keterangan: '${app.cabang.namaToko} · ${app.cabang.kode}',
+              onKeluar: app.keluar,
+              aksi: aksi,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 18),
-              child: Text('Cabang ${cabang.nama}\n${p?.peran.label ?? ''} · ${p?.nama ?? ''}',
-                  style: const TextStyle(color: Warna.hijauTeksTerang, fontSize: 15, height: 1.45)),
-            ),
-            for (final m in MenuAdmin.values)
-              if (p != null && m.bolehUntuk(p.peran))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Material(
-                    color: m == aktif ? const Color(0xFF1E5A45) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => onMenu(m),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 50),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(children: [
-                            Icon(m.ikon, color: Colors.white, size: 22),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(m.label,
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 16.5, fontWeight: m == aktif ? FontWeight.w800 : FontWeight.w500)),
-                            ),
-                          ]),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-          ]),
-        ),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(28, 18, 20, 18),
-              child: Row(children: [
-                Expanded(child: Text(judul, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800))),
-                ...aksi.expand((w) => [const SizedBox(width: 10), w]),
-                const SizedBox(width: 10),
-                // Tombol keluar selalu terlihat di kanan atas, tidak tertutup menu yang panjang.
-                OutlinedButton.icon(onPressed: () => app.keluar(), icon: const Icon(Icons.logout), label: const Text('Keluar')),
-              ]),
-            ),
-            const Divider(height: 2, thickness: 2, color: Warna.garisTipis),
             Expanded(child: child),
           ]),
         ),
-      ]),
+      ),
     );
   }
 }
-

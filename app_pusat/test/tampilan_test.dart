@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_core/pos_core.dart';
+import 'package:pos_ui/pos_ui.dart';
 
 import 'api_palsu.dart';
 
@@ -50,6 +51,9 @@ Future<void> _foto(WidgetTester t, String nama) async {
   if (_gambar) await expectLater(find.byKey(const ValueKey('layar')), matchesGoldenFile('gambar/$nama.png'));
 }
 
+/// Ikon menu (bukan teks yang sama di kartu angka).
+Finder _ubin(MenuPusat m) => find.descendant(of: find.byType(UbinMenu), matching: find.text(m.label));
+
 void main() {
   setUpAll(_muatHuruf);
 
@@ -81,26 +85,44 @@ void main() {
     await t.enterText(isian.at(2), '123456');
     await t.tap(find.text('Masuk').last);
     await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
     expect(sesi.admin?.nama, 'Admin Contoh');
+    expect(find.text('KANTOR PUSAT'), findsOneWidget);
     expect(find.text('Ringkasan semua toko'), findsWidgets);
+    await sesi.keluar();
+  });
+
+  testWidgets('menu ikon: ringkasan hari ini + toko yang tidak mengirim data', (t) async {
+    final (sesi, _) = await _pasang(t);
+    expect(find.text('KANTOR PUSAT'), findsOneWidget);
+    expect(find.text('Rp 3.805.000'), findsOneWidget);
+    for (final m in MenuPusat.values) {
+      expect(_ubin(m), findsOneWidget);
+    }
+    await _foto(t, '09-menu');
     await sesi.keluar();
   });
 
   for (final m in MenuPusat.values) {
     testWidgets('layar ${m.label}', (t) async {
       final (sesi, _) = await _pasang(t);
-      if (m != MenuPusat.ringkasan) {
-        await t.tap(find.text(m.label).first);
-        await t.pump(const Duration(milliseconds: 300));
-        await t.pump(const Duration(milliseconds: 300));
-      }
+      await t.tap(_ubin(m));
+      await t.pump(const Duration(milliseconds: 300));
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('KANTOR PUSAT'), findsNothing);
       await _foto(t, '1${m.index}-${m.name}');
+      await t.sendKeyEvent(LogicalKeyboardKey.escape);
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('KANTOR PUSAT'), findsOneWidget, reason: 'Esc kembali ke menu');
       await sesi.keluar();
     });
   }
 
   testWidgets('ringkasan: angka per toko tampil, toko yang belum kirim data ditandai', (t) async {
     final (sesi, _) = await _pasang(t);
+    await t.tap(_ubin(MenuPusat.ringkasan));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
     expect(find.text('Rp 3.805.000'), findsOneWidget);
     expect(find.text('A01 · Contoh Satu'), findsOneWidget);
     expect(find.text('Belum pernah'), findsOneWidget);
@@ -110,7 +132,7 @@ void main() {
 
   testWidgets('harga pusat: grosir di bawah HPP ditolak sebelum dikirim; yang benar terkirim', (t) async {
     final (sesi, api) = await _pasang(t);
-    await t.tap(find.text(MenuPusat.barang.label).first);
+    await t.tap(_ubin(MenuPusat.barang));
     await t.pump(const Duration(milliseconds: 300));
     await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.text('Gula Pasir 1 kg'));
@@ -141,7 +163,7 @@ void main() {
   testWidgets('sesi habis di server → kembali ke layar masuk dengan pesan', (t) async {
     final (sesi, api) = await _pasang(t);
     api.sesiHabis = true;
-    await t.tap(find.text(MenuPusat.transaksi.label).first);
+    await t.tap(_ubin(MenuPusat.transaksi));
     await t.pump(const Duration(milliseconds: 300));
     await t.pump(const Duration(milliseconds: 300));
     expect(sesi.admin, isNull);
@@ -152,7 +174,7 @@ void main() {
     final (sesi, _) = await _pasang(t);
     await t.pump(const Duration(minutes: 9));
     expect(sesi.admin, isNotNull);
-    await t.tap(find.text(MenuPusat.log.label).first); // ada aktivitas: hitungan diulang
+    await t.tap(_ubin(MenuPusat.log)); // ada aktivitas: hitungan diulang
     await t.pump(const Duration(minutes: 9));
     expect(sesi.admin, isNotNull);
     await t.pump(const Duration(minutes: 2));

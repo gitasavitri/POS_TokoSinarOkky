@@ -67,7 +67,7 @@ class _IsiLaporanState extends State<IsiLaporan> {
             ChoiceChip(
               label: Text(p.label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               selected: p == _periode,
-              selectedColor: Warna.hijauMuda,
+              selectedColor: Warna.utamaMuda,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               onSelected: (_) {
                 _periode = p;
@@ -110,16 +110,18 @@ class _IsiLaporanState extends State<IsiLaporan> {
         const SizedBox(height: 20),
         LayoutBuilder(builder: (context, c) {
           final kartu = [
-            KartuAngka(label: 'Penjualan bersih', nilai: formatRupiah(_r.penjualanBersih), catatan: 'setelah dikurangi retur'),
-            KartuAngka(label: 'Jumlah transaksi', nilai: '${_r.jumlahTransaksi}', catatan: 'rata-rata ${formatRupiah(_r.rataRataStruk)}'),
-            KartuAngka(label: 'Tunai', nilai: formatRupiah(_r.tunai)),
-            KartuAngka(label: 'Non-tunai', nilai: formatRupiah(_r.nonTunai)),
-            KartuAngka(label: 'Laba kotor', nilai: formatRupiah(_r.labaKotor), catatan: 'harga jual − HPP'),
+            KartuAngka(label: 'Penjualan bersih', nilai: formatRupiah(_r.penjualanBersih), catatan: 'setelah dikurangi retur', aksen: Warna.sukses, ikon: Icons.payments),
+            KartuAngka(label: 'Jumlah transaksi', nilai: '${_r.jumlahTransaksi}', catatan: 'rata-rata ${formatRupiah(_r.rataRataStruk)}', aksen: Warna.utama, ikon: Icons.receipt_long),
+            KartuAngka(label: 'Tunai', nilai: formatRupiah(_r.tunai), aksen: Warna.toska, ikon: Icons.money),
+            KartuAngka(label: 'Non-tunai', nilai: formatRupiah(_r.nonTunai), aksen: Warna.coklat, ikon: Icons.credit_card),
+            KartuAngka(label: 'Laba kotor', nilai: formatRupiah(_r.labaKotor), catatan: 'harga jual − HPP', aksen: Warna.ungu, ikon: Icons.trending_up),
             KartuAngka(
               label: 'Batal / retur',
               nilai: '${_r.jumlahBatal} batal',
               catatan: 'retur ${formatRupiah(_r.totalRetur)}',
               warna: _r.jumlahBatal > 0 ? Warna.merah : Warna.teks,
+              aksen: Warna.merahIkon,
+              ikon: Icons.assignment_return,
             ),
           ];
           final lebar = (c.maxWidth - 14 * 2) / 3;
@@ -257,7 +259,7 @@ class _IsiLogState extends State<IsiLog> {
             ChoiceChip(
               label: Text(p.label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               selected: p == _periode,
-              selectedColor: Warna.hijauMuda,
+              selectedColor: Warna.utamaMuda,
               onSelected: (_) {
                 _periode = p;
                 _muat();

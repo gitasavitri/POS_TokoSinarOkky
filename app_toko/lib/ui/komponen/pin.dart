@@ -45,8 +45,8 @@ class PapanPin extends StatelessWidget {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: i < pin.length ? Warna.hijau : Colors.white,
-                border: Border.all(color: Warna.hijau, width: 2),
+                color: i < pin.length ? Warna.utama : Colors.white,
+                border: Border.all(color: Warna.utama, width: 2),
               ),
             ),
         ],

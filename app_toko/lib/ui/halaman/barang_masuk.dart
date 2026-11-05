@@ -211,9 +211,9 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
                     style: const TextStyle(fontSize: 18),
                     decoration: const InputDecoration(
                       hintText: 'Scan barcode barang yang datang',
-                      prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.hijau),
+                      prefixIcon: Icon(Icons.qr_code_scanner, color: Warna.utama),
                       enabledBorder:
-                          OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Warna.hijau, width: 3)),
+                          OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Warna.utama, width: 3)),
                     ),
                     onSubmitted: (_) => _tambahDariScan(),
                   ),
@@ -225,7 +225,7 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
                       child: OutlinedButton(
                         onPressed: _barangBaru,
                         style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF2F8F5), foregroundColor: Warna.hijauGelap, side: const BorderSide(color: Warna.hijau, width: 2)),
+                            backgroundColor: Warna.utamaMuda, foregroundColor: Warna.utamaGelap, side: const BorderSide(color: Warna.utama, width: 2)),
                         child: const Text('+ Barang baru'),
                       ),
                     ),
@@ -244,9 +244,9 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: dipilih ? Warna.hijauMuda : Colors.white,
+                              color: dipilih ? Warna.utamaMuda : Colors.white,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: dipilih ? Warna.hijau : Warna.kepalaTabel, width: dipilih ? 3 : 2),
+                              border: Border.all(color: dipilih ? Warna.utama : Warna.kepalaTabel, width: dipilih ? 3 : 2),
                             ),
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -255,7 +255,7 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
                                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                                 ),
                                 Text('+${formatAngka(it.jumlah)} ${it.satuan}',
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Warna.hijauGelap)),
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Warna.utamaGelap)),
                               ]),
                               const SizedBox(height: 6),
                               Lencana.status(it.status),
@@ -299,7 +299,7 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
         ),
       ),
       Container(
-        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Warna.hijau, width: 4))),
+        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Warna.utama, width: 4))),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(children: [
           Expanded(
@@ -400,7 +400,7 @@ class _FormItemState extends State<_FormItem> {
           decoration: const BoxDecoration(border: Border(top: BorderSide(color: Warna.abuMuda, width: 2))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              LabelKecil(judul, warna: Warna.hijauGelap),
+              LabelKecil(judul, warna: Warna.utamaGelap),
               if (catatan != null) ...[const SizedBox(width: 10), Text(catatan, style: const TextStyle(fontSize: 15, color: Warna.teksPudar))],
             ]),
             const SizedBox(height: 12),
@@ -426,7 +426,7 @@ class _FormItemState extends State<_FormItem> {
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 20), children: [
-            const LabelKecil('Data barang', warna: Warna.hijauGelap),
+            const LabelKecil('Data barang', warna: Warna.utamaGelap),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(
@@ -525,7 +525,7 @@ class _FormItemState extends State<_FormItem> {
                         '${jualBerubah ? 'Sebelumnya ${formatRupiah(asal.harga!.eceran)} · ' : ''}'
                         '${untung > 0 ? 'Untung ${formatRupiah(untung)}' : 'Rugi ${formatRupiah(-untung)}'} per ${it.satuan}',
                         style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700, color: untung <= 0 ? Warna.merah : (jualBerubah ? Warna.oranye : const Color(0xFF0A6B44))),
+                            fontSize: 15, fontWeight: FontWeight.w700, color: untung <= 0 ? Warna.merah : (jualBerubah ? Warna.oranye : Warna.suksesTua)),
                       ),
                   ]),
                 ),
@@ -536,7 +536,7 @@ class _FormItemState extends State<_FormItem> {
               if (_grosir.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: const Color(0xFFF2F5F3), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: Warna.latarTerang, borderRadius: BorderRadius.circular(8)),
                   child: const Text('Belum ada harga grosir. Barang ini dijual dengan harga eceran saja.', style: TextStyle(fontSize: 16, color: Warna.teks2)),
                 ),
               for (var i = 0; i < _grosir.length; i++)
@@ -544,7 +544,7 @@ class _FormItemState extends State<_FormItem> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                      color: const Color(0xFFFAFBFA), borderRadius: BorderRadius.circular(8), border: Border.all(color: Warna.garisTipis, width: 2)),
+                      color: Warna.baris2, borderRadius: BorderRadius.circular(8), border: Border.all(color: Warna.garisTipis, width: 2)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       SizedBox(width: 90, child: Text('Tingkat ${i + 1}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Warna.teks2))),
@@ -586,7 +586,7 @@ class _FormItemState extends State<_FormItem> {
                     _grosir.add((TextEditingController(), TextEditingController()));
                     _simpanGrosir();
                   },
-                  style: OutlinedButton.styleFrom(foregroundColor: Warna.hijauGelap, side: const BorderSide(color: Warna.hijau, width: 2)),
+                  style: OutlinedButton.styleFrom(foregroundColor: Warna.utamaGelap, side: const BorderSide(color: Warna.utama, width: 2)),
                   child: const Text('+ Tambah tingkat harga'),
                 ),
               ),
@@ -621,8 +621,8 @@ class _Nilai extends StatelessWidget {
           height: 58,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(color: sorot ? Warna.hijauMuda : Warna.abuMuda, borderRadius: BorderRadius.circular(10)),
-          child: Text(nilai, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: sorot ? Warna.hijauGelap : Warna.teks)),
+          decoration: BoxDecoration(color: sorot ? Warna.utamaMuda : Warna.abuMuda, borderRadius: BorderRadius.circular(10)),
+          child: Text(nilai, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: sorot ? Warna.utamaGelap : Warna.teks)),
         ),
       ]);
 }
@@ -710,7 +710,7 @@ class _KonfirmasiState extends State<_Konfirmasi> {
                 columnWidths: const {0: FlexColumnWidth(4), 1: FlexColumnWidth(2), 2: FlexColumnWidth(2), 3: FlexColumnWidth(2), 4: FlexColumnWidth(2), 5: FlexColumnWidth(3)},
                 children: [
                   TableRow(
-                    decoration: const BoxDecoration(color: Color(0xFFF2F5F3)),
+                    decoration: const BoxDecoration(color: Warna.latarTerang),
                     children: [for (final k in ['NAMA BARANG', 'KATEGORI', 'MASUK', 'HPP', 'HARGA JUAL', 'HARGA GROSIR']) _sel(Text(k, style: kepala))],
                   ),
                   for (final i in baru)
@@ -737,12 +737,12 @@ class _KonfirmasiState extends State<_Konfirmasi> {
                     columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(4), 2: FlexColumnWidth(4)},
                     children: [
                       TableRow(
-                          decoration: const BoxDecoration(color: Color(0xFFF2F5F3)),
+                          decoration: const BoxDecoration(color: Warna.latarTerang),
                           children: [for (final k in ['DATA', 'SEBELUM', 'SESUDAH']) _sel(Text(k, style: kepala))]),
                       for (final (a, b, c) in perubahan(i))
                         TableRow(children: [
                           _sel(Text(a, style: gayaTebal)),
-                          _sel(Text(b, style: const TextStyle(fontSize: 17, color: Color(0xFF5E6A65), decoration: TextDecoration.lineThrough))),
+                          _sel(Text(b, style: const TextStyle(fontSize: 17, color: Warna.teksPudar, decoration: TextDecoration.lineThrough))),
                           _sel(Text(c, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Warna.oranye))),
                         ]),
                     ],
@@ -763,7 +763,7 @@ class _KonfirmasiState extends State<_Konfirmasi> {
                       Expanded(child: Text(i.nama, style: gayaTebal)),
                       Text('${i.asal!.stok} → ', style: gaya),
                       Text('${i.asal!.stok + i.jumlah} ${i.satuan} (+${i.jumlah})',
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Warna.hijauGelap)),
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Warna.utamaGelap)),
                     ]),
                   ),
               ]),
@@ -771,7 +771,7 @@ class _KonfirmasiState extends State<_Konfirmasi> {
         ]),
       ),
       Container(
-        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Warna.hijau, width: 4))),
+        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Warna.utama, width: 4))),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           CheckboxListTile(

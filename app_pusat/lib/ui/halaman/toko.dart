@@ -30,7 +30,7 @@ class _IsiTokoState extends State<IsiToko> {
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 22),
-                decoration: BoxDecoration(color: Warna.hijauMuda, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: Warna.utamaMuda, borderRadius: BorderRadius.circular(12)),
                 child: SelectableText(kode, textAlign: TextAlign.center, style: const TextStyle(fontFamily: fontMono, fontSize: 40, fontWeight: FontWeight.w700, letterSpacing: 4)),
               ),
               const SizedBox(height: 14),

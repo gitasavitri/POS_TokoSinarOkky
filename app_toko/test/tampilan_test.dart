@@ -14,6 +14,7 @@ import 'package:app_toko/data/repo/barang_masuk_repo.dart';
 import 'package:app_toko/layanan/aplikasi.dart';
 import 'package:app_toko/layanan/printer.dart';
 import 'package:app_toko/ui/akar.dart';
+import 'package:app_toko/ui/halaman/kasir.dart';
 import 'package:app_toko/ui/komponen/kerangka.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -75,6 +76,7 @@ Future<({Aplikasi app, Pengguna admin, Pengguna kasir, Pengguna spv})> _siapkanT
       metode: MetodeBayar.tunai, uangDiterima: 250000);
   app.penjualan.simpan(
       cabang: c, kasir: kasir, shift: shift, keranjang: Keranjang()..tambah(b('8990002')), metode: MetodeBayar.qris);
+  app.pemulihan.selesaiCetak(); // data contoh: anggap struknya sudah tercetak
   return (app: app, admin: admin, kasir: kasir, spv: spv);
 }
 
@@ -127,6 +129,58 @@ void main() {
     expect(find.text('Pembayaran'), findsOneWidget, reason: 'F12 harus membuka dialog bayar');
     await t.pump(const Duration(milliseconds: 400)); // animasi dialog baru mulai di frame berikutnya
     await _foto(t, '11-kasir-bayar');
+
+    // Bayar tunai Rp50.000 → kartu kembalian tetap tampil di layar kasir.
+    await t.enterText(find.descendant(of: find.byType(DialogBayar), matching: find.byType(TextField)), '50000');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(DialogBayar), findsNothing);
+    expect(find.text('Transaksi selesai'), findsOneWidget);
+    expect(find.text('KEMBALIAN'), findsOneWidget);
+    expect(find.text(formatRupiah(11000)), findsOneWidget);
+    await _foto(t, '12-kasir-kembalian');
+
+    // Barang berikutnya di-scan → kartu hilang, belanja baru dimulai.
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('Transaksi selesai'), findsNothing);
+    expect(find.text('Sabun Mandi 85 g'), findsOneWidget);
+    s.app.keluar();
+  });
+
+  testWidgets('kasir: uang pas tetap menampilkan kembalian Rp 0', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    await t.sendKeyEvent(LogicalKeyboardKey.f12);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    await t.enterText(find.descendant(of: find.byType(DialogBayar), matching: find.byType(TextField)), '4000');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('KEMBALIAN'), findsOneWidget);
+    expect(find.text('UANG PAS'), findsOneWidget);
+    expect(find.text(formatRupiah(0)), findsWidgets);
+    await _foto(t, '13-kasir-uang-pas');
+    s.app.keluar();
+  });
+
+  testWidgets('admin: Esc dari halaman dalam kembali ke menu ikon', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.admin);
+    await _pasang(t, s.app);
+    await t.tap(find.text(MenuAdmin.laporan.label).first);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('PENJUALAN'), findsNothing);
+    await t.sendKeyEvent(LogicalKeyboardKey.escape);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('PENJUALAN'), findsOneWidget);
     s.app.keluar();
   });
 

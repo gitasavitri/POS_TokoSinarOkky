@@ -102,18 +102,18 @@ class HalamanPenuh extends StatelessWidget {
     return Scaffold(
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
-          color: Warna.hijauTua,
+          color: Warna.utamaTua,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(children: [
             Text(judul, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(width: 20),
             Expanded(
               child: Text('${app.cabang.namaToko} · ${app.cabang.nama} · ${app.penggunaAktif?.nama ?? ''}',
-                  style: const TextStyle(color: Color(0xFFCFE3DA), fontSize: 17)),
+                  style: const TextStyle(color: Warna.utamaTeksTerang, fontSize: 17)),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Warna.hijauTua, minimumSize: const Size(48, 48)),
+              style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Warna.utamaTua, minimumSize: const Size(48, 48)),
               child: const Text('Kembali ke penjualan', style: TextStyle(fontSize: 16)),
             ),
           ]),
@@ -146,8 +146,9 @@ class _HalamanAdminState extends State<HalamanAdmin> {
         onBukaPengaturan: () => _buka(MenuAdmin.pengaturan),
       );
     }
+    if (_menu == MenuAdmin.beranda) return MenuBeranda(onMenu: _buka);
     final isi = switch (_menu) {
-      MenuAdmin.beranda => IsiBeranda(onMenu: _buka),
+      MenuAdmin.beranda => const SizedBox(),
       MenuAdmin.barangMasuk => const IsiBarangMasuk(),
       MenuAdmin.ubahHarga => const IsiUbahHarga(),
       MenuAdmin.koreksi => const IsiKoreksi(),
