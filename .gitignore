@@ -28,3 +28,4 @@ Thumbs.db
 .vscode/settings.json
 pubspec.lock.bak
 app_toko/test/gambar/
+!.env.contoh

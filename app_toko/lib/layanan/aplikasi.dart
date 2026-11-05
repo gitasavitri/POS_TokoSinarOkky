@@ -16,6 +16,7 @@ import '../data/repo/pengguna_repo.dart';
 import '../data/repo/penjualan_repo.dart';
 import '../data/repo/setup_repo.dart';
 import 'printer.dart';
+import 'sinkron.dart';
 
 /// Lama tidak dipakai sebelum keluar otomatis.
 const batasDiam = Duration(minutes: 10);
@@ -30,7 +31,8 @@ class Aplikasi extends ChangeNotifier {
         barangMasuk = BarangMasukRepo(db),
         harga = HargaRepo(db),
         laporan = LaporanRepo(db),
-        setup = SetupRepo(db);
+        setup = SetupRepo(db),
+        sinkron = LayananSinkron(db);
 
   final DatabaseToko db;
   final LayananPrinter printer;
@@ -44,6 +46,9 @@ class Aplikasi extends ChangeNotifier {
   final HargaRepo harga;
   final LaporanRepo laporan;
   final SetupRepo setup;
+
+  /// Kirim data ke Server Pusat & ambil harga/barang dari pusat (otomatis tiap menit kalau sudah didaftarkan).
+  final LayananSinkron sinkron;
 
   Pengguna? _pengguna;
   Shift? _shift;

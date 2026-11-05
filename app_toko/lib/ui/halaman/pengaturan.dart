@@ -5,6 +5,7 @@ import 'package:pos_core/pos_core.dart';
 
 import '../../data/repo/pengaturan_repo.dart';
 import '../../layanan/aplikasi.dart';
+import '../../layanan/sinkron.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
 import 'shift.dart';
@@ -136,13 +137,14 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
         if (admin) const SizedBox(height: 20),
         if (admin) const _KategoriSupplier(),
         if (admin) const SizedBox(height: 20),
+        _KantorPusat(bolehAtur: admin),
+        const SizedBox(height: 20),
         Panel(
           judul: 'Data & cadangan',
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             _Baris('Data penjualan tersimpan di', 'Komputer ini (tetap jalan tanpa internet)'),
             _Baris('Lokasi file database', app.lokasiDatabase ?? '-'),
             const _Baris('Cadangan otomatis', 'Setiap tutup shift → Documents\\POS-Cadangan'),
-            const _Baris('Kirim ke kantor pusat', 'Belum aktif (menunggu Server Pusat)'),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -292,5 +294,107 @@ class _KategoriSupplierState extends State<_KategoriSupplier> {
       const SizedBox(width: 18),
       kolom('Supplier', [for (final s in app.katalog.supplier()) s.nama], _sup, false),
     ]);
+  }
+}
+
+/// Status kirim data ke kantor pusat + pendaftaran PC ini (Admin).
+class _KantorPusat extends StatefulWidget {
+  const _KantorPusat({required this.bolehAtur});
+  final bool bolehAtur;
+  @override
+  State<_KantorPusat> createState() => _KantorPusatState();
+}
+
+class _KantorPusatState extends State<_KantorPusat> {
+  final _alamat = TextEditingController();
+  final _kode = TextEditingController();
+  final _nama = TextEditingController(text: 'PC kasir 1');
+  bool _sibuk = false;
+
+  Future<void> _daftar() async {
+    final app = context.app;
+    setState(() => _sibuk = true);
+    try {
+      await app.sinkron.daftar(alamat: _alamat.text, kode: _kode.text, namaPerangkat: _nama.text, olehId: app.penggunaAktif!.id);
+      if (mounted) tampilkanPesan(context, 'PC ini sudah terdaftar. Data mulai dikirim ke kantor pusat.');
+      _kode.clear();
+    } on GalatSinkron catch (e) {
+      if (mounted) tampilkanPesan(context, e.pesan, galat: true);
+    } finally {
+      if (mounted) setState(() => _sibuk = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.app.sinkron;
+    return ListenableBuilder(
+      listenable: s,
+      builder: (context, _) {
+        final terakhir = s.terakhirBerhasil;
+        final antrean = s.antrean;
+        return Panel(
+          judul: 'Kirim data ke kantor pusat',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (s.terdaftar) ...[
+              _Baris('Server', s.alamatServer ?? '-'),
+              _Baris('Terakhir berhasil', terakhir == null ? 'Belum pernah' : '${formatJam(terakhir)} · ${formatTanggal(terakhir)}'),
+              _Baris('Menunggu dikirim', antrean == 0 ? 'Tidak ada, semua sudah terkirim' : '$antrean data (dikirim otomatis tiap menit)'),
+              if (s.galatTerakhir != null) ...[const SizedBox(height: 8), KotakPesan(s.galatTerakhir!, jenis: JenisPesan.perhatian)],
+              if (s.ditolakTerakhir.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                KotakPesan('Ditolak server: ${s.ditolakTerakhir.take(3).join(' · ')}', jenis: JenisPesan.perhatian),
+              ],
+              if (s.masalahTerakhir.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                KotakPesan('Perlu dicek: ${s.masalahTerakhir.take(3).join(' · ')}', jenis: JenisPesan.perhatian),
+              ],
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                if (widget.bolehAtur)
+                  OutlinedButton(
+                    onPressed: () async {
+                      final ok = await konfirmasi(context,
+                          judul: 'Putuskan dari kantor pusat?',
+                          isi: 'PC ini berhenti mengirim data. Untuk menyambung lagi perlu kode pendaftaran baru dari Admin pusat.',
+                          ya: 'Putuskan',
+                          bahaya: true);
+                      if (ok) s.lupakanServer();
+                    },
+                    child: const Text('Putuskan'),
+                  ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: s.sedangJalan ? null : s.sinkronSekarang,
+                  icon: const Icon(Icons.sync),
+                  label: Text(s.sedangJalan ? 'Mengirim…' : 'Kirim sekarang'),
+                ),
+              ]),
+            ] else if (!widget.bolehAtur)
+              const Text('Belum tersambung ke kantor pusat. Minta Admin mendaftarkan PC ini.', style: TextStyle(fontSize: 17))
+            else ...[
+              const Text(
+                'Belum tersambung. Minta kode pendaftaran ke Admin pusat (berlaku 24 jam, sekali pakai), lalu isi di sini. '
+                'Penjualan tetap jalan walau internet putus.',
+                style: TextStyle(fontSize: 16, color: Warna.teksPudar),
+              ),
+              const SizedBox(height: 14),
+              TextField(controller: _alamat, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Alamat server', hintText: 'https://pos.tokoanda.com')),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: TextField(controller: _kode, style: const TextStyle(fontSize: 20, letterSpacing: 2), decoration: const InputDecoration(labelText: 'Kode pendaftaran', hintText: 'ABCDE-FGHJK'))),
+                const SizedBox(width: 14),
+                Expanded(child: TextField(controller: _nama, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Nama PC ini'))),
+              ]),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(onPressed: _sibuk ? null : _daftar, child: Text(_sibuk ? 'Mendaftarkan…' : 'Daftarkan PC ini')),
+              ),
+            ],
+          ]),
+        );
+      },
+    );
   }
 }

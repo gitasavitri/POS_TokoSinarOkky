@@ -16,5 +16,6 @@ Future<void> main() async {
   final lokasi = '${folder.path}${Platform.pathSeparator}pos_toko.db';
   final db = DatabaseToko.buka(lokasi);
   final app = Aplikasi(db: db, printer: LayananPrinter.untukSistemIni(), lokasiDatabase: lokasi);
+  app.sinkron.mulai(); // tidak melakukan apa-apa sebelum PC ini didaftarkan ke Server Pusat
   runApp(AplikasiToko(app: app));
 }
