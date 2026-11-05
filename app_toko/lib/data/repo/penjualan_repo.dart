@@ -99,6 +99,9 @@ class PenjualanRepo {
 
   // ---------------------------------------------------------------- transaksi
 
+  /// Nomor yang akan dipakai transaksi berikutnya (untuk ditampilkan di layar kasir).
+  String nomorBerikutnya(InfoCabang cabang) => _nomorBerikutnya(cabang, _db.sekarang());
+
   String _nomorBerikutnya(InfoCabang cabang, DateTime waktu) {
     final awalan = awalanNomorTransaksi(cabang.kode, waktu);
     final r = _db.satu(
