@@ -1,0 +1,28 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+
+# Node.js
+node_modules/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+
+# Database lokal & cadangan (jangan di-commit, bisa berisi data toko)
+*.db
+*.sqlite
+*.sqlite3
+backup/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json
