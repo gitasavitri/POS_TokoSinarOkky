@@ -1,0 +1,15 @@
+name: pos_core
+description: Logika bersama POS Toko Sinar Okky (harga, keranjang, pembayaran, HPP, struk, hak akses).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  cryptography: ^2.9.0
+  uuid: ^4.6.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0

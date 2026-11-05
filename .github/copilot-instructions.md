@@ -80,7 +80,8 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Keluar otomatis setelah 10 menit tidak dipakai.
 
 **Harga**
-- Harga jual berlaku = baris `harga_jual` terbaru untuk (barang, cabang ini). Kalau tidak ada, pakai baris terbaru dengan `cabang_id IS NULL` (harga semua cabang).
+- Harga jual berlaku = versi **terbaru** (menurut `berlaku_mulai`) di antara harga khusus toko ini dan harga semua toko (`cabang_id IS NULL`).
+  Perubahan harga dari Aplikasi Toko (barang masuk / ubah harga) berlaku untuk toko itu saja. Harga dari pusat yang lebih baru menggantikannya.
 - Harga grosir bertingkat melekat pada satu versi harga jual (`harga_grosir.harga_jual_id`).
 - Saat menjual: pilih tingkat dengan `min_qty` terbesar yang `≤ jumlah` di baris itu. **Harga grosir berlaku untuk seluruh jumlah di baris itu.**
   Contoh: tingkat min 10 = Rp17.000; beli 15 → 15 × Rp17.000.
