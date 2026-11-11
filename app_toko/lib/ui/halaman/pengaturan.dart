@@ -371,6 +371,66 @@ class _KantorPusatState extends State<_KantorPusat> {
     }
   }
 
+  /// Server sama, alamat berbeda (mis. PC kasir pindah ke komputer sendiri, atau pakai alamat https tunnel).
+  Future<void> _gantiAlamat(LayananSinkron s) async {
+    final isian = TextEditingController(text: s.alamatServer ?? '');
+    String? galat;
+    var sibuk = false;
+    await showDialog<void>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, atur) => AlertDialog(
+          title: const Text('Ganti alamat server', style: TextStyle(fontWeight: FontWeight.w800)),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text(
+                'Untuk server yang sama dengan alamat baru, tanpa kode pendaftaran baru. Contoh:\n'
+                '• http://localhost:3000 (server di PC ini)\n'
+                '• http://192.168.1.10:3000 (server di PC lain di toko)\n'
+                '• https://pos.tokoanda.com (lewat internet)',
+                style: TextStyle(fontSize: 15.5, height: 1.5, color: Warna.teksPudar),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('alamat-server-baru'),
+                controller: isian,
+                autofocus: true,
+                style: const TextStyle(fontSize: 18),
+                decoration: InputDecoration(labelText: 'Alamat server baru', errorText: galat),
+              ),
+            ]),
+          ),
+          actions: [
+            OutlinedButton(onPressed: sibuk ? null : () => Navigator.pop(c), child: const Text('Batal')),
+            FilledButton(
+              onPressed: sibuk
+                  ? null
+                  : () async {
+                      atur(() {
+                        sibuk = true;
+                        galat = null;
+                      });
+                      try {
+                        await s.gantiAlamat(alamat: isian.text, olehId: context.app.penggunaAktif!.id);
+                        if (c.mounted) Navigator.pop(c);
+                        if (mounted) tampilkanPesan(context, 'Alamat server diganti.');
+                      } catch (e) {
+                        atur(() {
+                          sibuk = false;
+                          galat = pesanGalat(e);
+                        });
+                      }
+                    },
+              child: Text(sibuk ? 'Mengecek…' : 'Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    // isian tidak di-dispose di sini: dialog masih memakainya selama animasi menutup.
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = context.app.sinkron;
@@ -397,6 +457,14 @@ class _KantorPusatState extends State<_KantorPusat> {
               ],
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                if (widget.bolehAtur) ...[
+                  OutlinedButton(
+                    key: const ValueKey('ganti-alamat-server'),
+                    onPressed: () => _gantiAlamat(s),
+                    child: const Text('Ganti alamat'),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 if (widget.bolehAtur)
                   OutlinedButton(
                     onPressed: () async {

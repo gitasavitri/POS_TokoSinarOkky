@@ -29,6 +29,7 @@ const namaAksi = {
   'hitung_ulang_shift': 'Hitung ulang uang shift',
   'kas_keluar': 'Kas keluar',
   'kas_masuk': 'Kas masuk',
+  'ganti_alamat_server': 'Ganti alamat server',
   'tambah_pengguna': 'Tambah karyawan',
   'perangkat_terdaftar': 'PC toko terdaftar',
   'login_pusat': 'Admin pusat masuk',

@@ -7,7 +7,7 @@ Kasir tetap bisa berjualan tanpa internet; data dikirim ke pusat begitu tersambu
 |---|---|---|---|
 | Aplikasi Toko | `app_toko/` | Flutter Windows + SQLite | PC kasir tiap toko kecil (Kasir, SPV, Admin toko) |
 | Aplikasi Pusat | `app_pusat/` | Flutter Windows | PC toko utama (Admin pusat, tidak untuk berjualan) |
-| Server Pusat | `server/` | Node.js + Express + MySQL | VPS |
+| Server Pusat | `server/` | Node.js + Express + MySQL | PC Windows toko (lihat `docs/PANDUAN-SERVER-TOKO.md`) |
 | Logika bersama | `packages/pos_core/` | Dart | harga & grosir, HPP, struk ESC/POS, hak akses, keamanan, klien server |
 | Tampilan bersama | `packages/pos_ui/` | Flutter | warna, panel, tabel, grafik |
 

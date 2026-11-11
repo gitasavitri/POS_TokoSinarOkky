@@ -125,19 +125,61 @@ jobs:
           flutter pub get
           flutter build windows --release
 
-      - name: Kemas jadi zip
+      - name: Runtime Visual C++ ikut dikemas
         shell: pwsh
         run: |
-          # Sertakan runtime Visual C++ supaya jalan di PC yang belum memasangnya.
+          # Supaya jalan di PC yang belum memasang Visual C++ Redistributable.
           $tujuan = '${{ matrix.app }}/build/windows/x64/runner/Release'
           foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
             Copy-Item "$env:WINDIR\System32\$dll" $tujuan -ErrorAction Continue
           }
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress | Out-Null
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $versi = (Select-String -Path '${{ matrix.app }}/pubspec.yaml' -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $app = if ('${{ matrix.app }}' -eq 'app_toko') { 'toko' } else { 'pusat' }
+          & $iscc /Q "/DAPP=$app" "/DVERSI=$versi" installer/pos.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup gagal ($LASTEXITCODE)" }
+          Get-ChildItem installer/hasil
+
+      - name: Kemas jadi zip (cadangan, tanpa installer)
+        shell: pwsh
+        run: |
           $nama = if ('${{ matrix.app }}' -eq 'app_toko') { 'POS-Toko' } else { 'POS-Pusat' }
           Compress-Archive -Path '${{ matrix.app }}/build/windows/x64/runner/Release/*' -DestinationPath "$nama-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app == 'app_toko' && 'POS-Toko-installer' || 'POS-Pusat-installer' }}
+          path: installer/hasil/*.exe
+          retention-days: 30
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app == 'app_toko' && 'POS-Toko-windows' || 'POS-Pusat-windows' }}
           path: '*-windows.zip'
           retention-days: 30
+
+  skrip-server-windows:
+    name: Cek skrip server Windows (PowerShell)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Periksa tata bahasa skrip
+        shell: powershell
+        run: |
+          $salah = 0
+          foreach ($f in Get-ChildItem server/windows/*.ps1) {
+            $err = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$err) | Out-Null
+            if ($err) { $salah++; $err | ForEach-Object { Write-Host "$($f.Name): $($_.Extent.StartLineNumber): $($_.Message)" } }
+            else { Write-Host "ok $($f.Name)" }
+          }
+          if ($salah) { throw "$salah skrip bermasalah" }

@@ -112,6 +112,35 @@ void main() {
     });
   });
 
+  group('ganti alamat server', () {
+    test('alamat baru dicek dulu; token tetap, tidak perlu daftar ulang', () async {
+      final t = await Toko.baru('A01');
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((r) {
+        r.response.headers.contentType = ContentType.json;
+        r.response.write(r.uri.path == '/api/sehat' ? '{"ok":true}' : '{"galat":"x"}');
+        r.response.close();
+      });
+      final pengaturan = PengaturanRepo(t.db)
+        ..simpan(PengaturanRepo.kServerUrl, 'http://localhost:1')
+        ..simpan(PengaturanRepo.kTokenPerangkat, 'token-lama');
+      final s = LayananSinkron(t.db);
+      await expectLater(s.gantiAlamat(alamat: 'http://pos.contoh.com', olehId: t.admin.id), throwsA(isA<GalatSinkron>()),
+          reason: 'http di luar jaringan lokal ditolak');
+      await expectLater(s.gantiAlamat(alamat: 'http://127.0.0.1:1', olehId: t.admin.id), throwsA(isA<GalatSinkron>()),
+          reason: 'alamat yang tidak menjawab ditolak');
+      expect(s.alamatServer, 'http://localhost:1');
+
+      await s.gantiAlamat(alamat: 'http://127.0.0.1:${server.port}/', olehId: t.admin.id);
+      expect(s.alamatServer, 'http://127.0.0.1:${server.port}');
+      expect(pengaturan.ambil(PengaturanRepo.kTokenPerangkat), 'token-lama');
+      expect(t.db.satu("SELECT COUNT(*) AS n FROM log_aktivitas WHERE aksi = 'ganti_alamat_server'")!['n'], 1);
+      await s.sinkronSekarang(); // tunggu sinkron yang langsung dimulai setelah ganti alamat
+      s.dispose();
+      await server.close(force: true);
+    });
+  });
+
   group('terapkan data dari pusat', () {
     late Toko t;
     const adminPusat = 'a0000000-0000-4000-8000-000000000001';

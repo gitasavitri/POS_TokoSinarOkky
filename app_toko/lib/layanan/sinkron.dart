@@ -76,6 +76,33 @@ class LayananSinkron extends ChangeNotifier {
     mulai();
   }
 
+  /// Ganti alamat server tanpa mendaftar ulang (server sama, alamat berbeda), mis. dari
+  /// `http://localhost:3000` (server di PC ini) ke `http://192.168.1.10:3000` (PC kasir pindah ke komputer sendiri)
+  /// atau ke alamat https tunnel. Alamat baru dicek dulu harus bisa dihubungi.
+  Future<void> gantiAlamat({required String alamat, required String olehId}) async {
+    if (!terdaftar) throw StateError('PC ini belum terdaftar ke kantor pusat');
+    final dasar = KlienPusat.periksaAlamat(alamat);
+    final k = KlienPusat(dasar);
+    try {
+      final r = await k.minta('GET', '/api/sehat');
+      if (r['ok'] != true) throw const GalatSinkron('Alamat itu bukan Server POS');
+    } finally {
+      k.tutup();
+    }
+    final lama = alamatServer;
+    final cabangId = _pengaturan.ambil(PengaturanRepo.kCabangId);
+    _db.transaksi(() {
+      _pengaturan.simpan(PengaturanRepo.kServerUrl, dasar.toString());
+      _db.log(cabangId: cabangId, penggunaId: olehId, aksi: 'ganti_alamat_server', detail: {
+        'lama': lama == null ? null : Uri.tryParse(lama)?.host,
+        'baru': dasar.host,
+      });
+    });
+    galatTerakhir = null;
+    notifyListeners();
+    mulai();
+  }
+
   void lupakanServer() {
     _timer?.cancel();
     _pengaturan.simpan(PengaturanRepo.kTokenPerangkat, null);

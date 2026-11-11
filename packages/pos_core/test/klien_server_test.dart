@@ -65,4 +65,13 @@ void main() {
     expect(KlienServer.periksaAlamat('https://pos.contoh.com//').toString(), 'https://pos.contoh.com');
     expect(() => KlienServer.periksaAlamat('http://pos.contoh.com'), throwsA(isA<GalatServer>()));
   });
+
+  test('http boleh untuk server di jaringan lokal toko (PC kasir kedua → PC server)', () {
+    for (final a in ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.1.10:3000', 'http://10.0.0.5:3000', 'http://172.20.1.2:3000']) {
+      expect(KlienServer.periksaAlamat(a).scheme, 'http', reason: a);
+    }
+    for (final a in ['http://172.32.0.1:3000', 'http://8.8.8.8', 'http://192.169.1.1', 'http://192.168.1.300', 'http://192.168.1.10.contoh.com', 'http://abc.trycloudflare.com']) {
+      expect(() => KlienServer.periksaAlamat(a), throwsA(isA<GalatServer>()), reason: a);
+    }
+  });
 }

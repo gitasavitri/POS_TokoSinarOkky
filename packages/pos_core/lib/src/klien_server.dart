@@ -20,15 +20,27 @@ class KlienServer {
   final String? token;
   final HttpClient _http;
 
-  /// Alamat server wajib HTTPS, kecuali localhost (untuk uji coba).
+  /// Alamat server wajib HTTPS, kecuali server di PC ini (localhost) atau di jaringan lokal toko
+  /// (IP 192.168.x.x, 10.x.x.x, 172.16–31.x.x), mis. PC kasir kedua yang tersambung ke PC server lewat kabel/WiFi toko.
+  /// Dari luar toko (rumah, cabang lain) tetap wajib https (lewat tunnel/domain).
   static Uri periksaAlamat(String alamat) {
     final u = Uri.tryParse(alamat.trim().replaceAll(RegExp(r'/+$'), ''));
     if (u == null || !u.hasScheme || u.host.isEmpty) throw const GalatServer('Alamat server tidak valid, contoh: https://pos.tokoanda.com');
-    final lokal = u.host == 'localhost' || u.host == '127.0.0.1';
-    if (u.scheme != 'https' && !(lokal && u.scheme == 'http')) {
-      throw const GalatServer('Alamat server harus diawali https:// supaya data terenkripsi');
+    if (u.scheme != 'https' && !(u.scheme == 'http' && alamatLokal(u.host))) {
+      throw const GalatServer('Alamat server harus diawali https:// supaya data terenkripsi '
+          '(http:// hanya boleh untuk server di PC ini atau di jaringan lokal toko, mis. http://192.168.1.10:3000)');
     }
     return u;
+  }
+
+  /// localhost atau alamat IPv4 jaringan lokal (privat).
+  static bool alamatLokal(String host) {
+    if (host == 'localhost' || host == '127.0.0.1') return true;
+    final m = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(host);
+    if (m == null) return false;
+    final b = [for (var i = 1; i <= 4; i++) int.parse(m.group(i)!)];
+    if (b.any((x) => x > 255)) return false;
+    return b[0] == 10 || (b[0] == 192 && b[1] == 168) || (b[0] == 172 && b[1] >= 16 && b[1] <= 31);
   }
 
   Future<Map<String, Object?>> minta(String metode, String jalur, {Object? isi, Map<String, String>? query}) async {

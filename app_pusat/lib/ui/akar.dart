@@ -83,7 +83,7 @@ class _LayarDepan extends StatelessWidget {
             ),
             padding: const EdgeInsets.all(48),
             child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(Icons.store_mall_directory_outlined, color: Colors.white, size: 56),
+              Image(image: AssetImage('assets/gambar/logo.png'), width: 72, height: 72, filterQuality: FilterQuality.medium),
               SizedBox(height: 18),
               Text('Kantor Pusat', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, height: 1.1)),
               SizedBox(height: 8),

@@ -82,12 +82,8 @@ class _HalamanMasukState extends State<HalamanMasuk> {
           ),
           padding: const EdgeInsets.fromLTRB(48, 56, 48, 40),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(color: Warna.utamaMuda, borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.shopping_cart_outlined, size: 36, color: Warna.utamaTua),
-            ),
+            // Logo aplikasi (sama dengan ikon .exe). Ganti assets/gambar/logo.png kalau toko sudah punya logo.
+            Image.asset('assets/gambar/logo.png', width: 72, height: 72, filterQuality: FilterQuality.medium),
             const SizedBox(height: 20),
             Text(cabang.namaToko, style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, height: 1.1)),
             const SizedBox(height: 8),

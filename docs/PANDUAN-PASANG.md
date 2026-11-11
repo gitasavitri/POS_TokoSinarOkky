@@ -5,17 +5,20 @@ Bagian **A** dan **B** cukup untuk mencoba di satu laptop. Server pusat (bagian 
 
 ---
 
-## A. Ambil program Windows (.exe)
+## A. Pasang program Windows (installer)
 
-Program dibuat otomatis oleh GitHub setiap ada perubahan di branch `pengembangan` atau `main`.
+Installer dibuat otomatis oleh GitHub setiap ada perubahan di branch `pengembangan` atau `main`.
 
 1. Buka repo di GitHub, lalu tab **Actions**, lalu run teratas yang bertanda hijau (✓) bernama **Test & build**.
 2. Di bagian bawah halaman ada **Artifacts**:
-   - `POS-Toko-windows`: untuk PC kasir di toko kecil.
-   - `POS-Pusat-windows`: untuk PC admin di toko utama.
-3. Unduh, lalu ekstrak (klik kanan, **Extract All**) ke folder tetap, misalnya `C:\POS-Toko`.
-   Jangan dijalankan langsung dari dalam file zip.
-4. Klik kanan `app_toko.exe`, pilih **Send to → Desktop (create shortcut)**, lalu ganti nama shortcut menjadi "Kasir".
+   - `POS-Toko-installer`: untuk PC kasir di toko kecil.
+   - `POS-Pusat-installer`: untuk PC Admin (di rumah / toko utama).
+   - `POS-Toko-windows` / `POS-Pusat-windows`: versi zip tanpa installer (cadangan, kalau installer bermasalah).
+3. Unduh, ekstrak zip-nya, lalu jalankan `POS-Toko-Setup-x.y.z.exe` (atau `POS-Pusat-Setup-…`). Next sampai selesai.
+   - Ikon **POS Toko** / **POS Pusat** dibuat di Desktop dan Start Menu.
+   - Untuk PC kasir, centang **Buka POS Toko otomatis setelah Windows menyala** kalau mau.
+4. **Update** = jalankan installer versi baru di atasnya. Data toko tidak hilang, karena data disimpan di
+   AppData/Documents, bukan di folder program. **Uninstall juga tidak menghapus data.**
 
 Saat pertama dibuka, Windows bisa menampilkan **"Windows protected your PC"**. Ini muncul karena program belum
 ditandatangani sertifikat berbayar. Klik **More info → Run anyway**. Tanda tangan kode bisa ditambahkan nanti.
@@ -47,9 +50,13 @@ Kebutuhan PC: Windows 10/11 64-bit, layar minimal 1366×768. Internet tidak waji
 dan aplikasi memberi tahu bahwa struk tidak tercetak. Printer "Microsoft Print to PDF" **tidak** bisa dipakai
 karena struk dikirim sebagai perintah ESC/POS, bukan sebagai dokumen.
 
-## C. Server Pusat di VPS
+## C. Server Pusat
 
-Ikuti [`server/README.md`](../server/README.md). Ringkasnya:
+**Keputusan 11 Nov 2026: server dipasang di PC toko (bukan VPS).** Ikuti
+[`PANDUAN-SERVER-TOKO.md`](PANDUAN-SERVER-TOKO.md): server menyala otomatis, cadangan harian, sambungan PC kasir
+lain, dan alamat https untuk Aplikasi Pusat di rumah.
+
+Kalau suatu saat pindah ke VPS, ikuti [`server/README.md`](../server/README.md). Ringkasnya:
 
 1. Siapkan VPS Ubuntu dengan **MySQL 8**, **Node.js 22**, dan sebuah **domain** (misalnya `pos.tokoanda.com`)
    yang diarahkan ke IP VPS.

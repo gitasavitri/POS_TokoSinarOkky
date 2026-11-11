@@ -136,6 +136,9 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - **Internet: ada di toko kecil.** Sinkronisasi otomatis tetap dipakai, tapi kasir tetap wajib bisa jalan saat internet putus.
 - **Tidak memakai laci uang.**
 - **Toko kecil pertama buka akhir November 2026.**
+- **Server (11 Nov 2026): di PC Windows toko, bukan VPS.** Sementara satu PC = server + kasir; 1–2 bulan lagi kasir
+  pindah ke komputer sendiri. Alamat `http://` hanya boleh untuk localhost/IP jaringan lokal; dari luar wajib https
+  (Cloudflare Tunnel). Lihat `docs/PANDUAN-SERVER-TOKO.md`.
 
 ## 8. Keputusan terbuka (jangan diasumsikan sendiri)
 

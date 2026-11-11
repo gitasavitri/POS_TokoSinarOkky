@@ -180,6 +180,7 @@ const _namaAksi = {
   'hitung_ulang_shift': 'Hitung ulang uang shift',
   'kas_keluar': 'Kas keluar',
   'kas_masuk': 'Kas masuk',
+  'ganti_alamat_server': 'Ganti alamat server',
   'batal_transaksi': 'Membatalkan transaksi',
   'retur': 'Retur',
   'kirim_barang_masuk': 'Kirim barang masuk',
