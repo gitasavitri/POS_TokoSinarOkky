@@ -269,36 +269,40 @@ class InputRupiah extends StatelessWidget {
 
 /// Tombol minus/angka/plus untuk jumlah barang.
 class PengaturJumlah extends StatelessWidget {
-  const PengaturJumlah({super.key, required this.nilai, required this.onUbah, this.min = 1});
+  const PengaturJumlah({super.key, required this.nilai, required this.onUbah, this.min = 1, this.ringkas = false});
   final int nilai;
   final ValueChanged<int> onUbah;
   final int min;
 
+  /// Versi kecil untuk baris daftar belanja kasir (tombol 32 px).
+  final bool ringkas;
+
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        _Tombol(ikon: Icons.remove, label: 'Kurangi jumlah', onTap: nilai > min ? () => onUbah(nilai - 1) : null),
+        _Tombol(ikon: Icons.remove, label: 'Kurangi jumlah', ukuran: ringkas ? 32 : 46, onTap: nilai > min ? () => onUbah(nilai - 1) : null),
         SizedBox(
-          width: 56,
-          child: Text('$nilai', textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          width: ringkas ? 44 : 56,
+          child: Text('$nilai', textAlign: TextAlign.center, style: TextStyle(fontSize: ringkas ? 18 : 22, fontWeight: FontWeight.w800)),
         ),
-        _Tombol(ikon: Icons.add, label: 'Tambah jumlah', onTap: () => onUbah(nilai + 1)),
+        _Tombol(ikon: Icons.add, label: 'Tambah jumlah', ukuran: ringkas ? 32 : 46, onTap: () => onUbah(nilai + 1)),
       ]);
 }
 
 class _Tombol extends StatelessWidget {
-  const _Tombol({required this.ikon, required this.label, required this.onTap});
+  const _Tombol({required this.ikon, required this.label, required this.onTap, this.ukuran = 46});
   final IconData ikon;
   final String label;
   final VoidCallback? onTap;
+  final double ukuran;
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 46,
-        height: 46,
+        width: ukuran,
+        height: ukuran,
         child: OutlinedButton(
           onPressed: onTap,
-          style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(46, 46)),
-          child: Icon(ikon, size: 24, semanticLabel: label),
+          style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size(ukuran, ukuran)),
+          child: Icon(ikon, size: ukuran * 0.52, semanticLabel: label),
         ),
       );
 }

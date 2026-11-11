@@ -905,6 +905,43 @@ void main() {
     expect(find.byKey(const ValueKey('pita-latihan')), findsNothing);
     expect(find.byKey(const ValueKey('nyalakan-latihan')), findsOneWidget);
   });
+
+  testWidgets('kasir: layar transaksi pas di laptop skala 150% (1280×730) dan 1366×768', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    final app = s!.app;
+    final c = app.cabang;
+    final kat = app.katalog.kategori().first.id;
+    app.barangMasuk.kirim(
+      cabang: c,
+      oleh: s.kasir,
+      draft: DraftBarangMasuk(supplierId: app.katalog.supplier().first.id, noFaktur: 'F-CONTOH-02', item: [
+        DraftItemMasuk(barcode: '8990004', nama: 'Teh Celup isi 25', kategoriId: kat, satuan: 'kotak', jumlah: 20, hpp: 4500, hargaJual: 6000),
+        DraftItemMasuk(barcode: '8990005', nama: 'Gas Elpiji 3 kg', kategoriId: kat, satuan: 'tabung', jumlah: 10, hpp: 18000, hargaJual: 18900),
+        DraftItemMasuk(barcode: '8990006', nama: 'Mi Instan Goreng', kategoriId: kat, satuan: 'pcs', jumlah: 80, hpp: 2700, hargaJual: 3500),
+      ]),
+    );
+    app.masuk(s.kasir);
+    t.view.physicalSize = const Size(1920, 1095);
+    t.view.devicePixelRatio = 1.5;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(RepaintBoundary(key: const ValueKey('layar'), child: AplikasiToko(app: app)));
+    await t.pump(const Duration(milliseconds: 300));
+    await _keTransaksi(t);
+    for (final bc in ['8990001', '8990002', '8990003', '8990004', '8990006']) {
+      await _scanMasuk(t, bc);
+    }
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990005');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('Gas Elpiji 3 kg'), findsOneWidget, reason: 'nama barang muncul di kotak input');
+    await _foto(t, '60-kasir-laptop-150');
+    t.view.physicalSize = _ukuran;
+    t.view.devicePixelRatio = 1;
+    await t.pump(const Duration(milliseconds: 300));
+    await _foto(t, '61-kasir-1366');
+    expect(find.byKey(const ValueKey('kembali-menu')), findsOneWidget);
+    app.keluar();
+  });
 }
 
 /// Kasir yang belum buka shift: buka shift lewat kotak shift di menu.
