@@ -12,15 +12,19 @@ import 'package:app_toko/data/database.dart';
 import 'package:app_toko/data/model.dart';
 import 'package:app_toko/data/repo/barang_masuk_repo.dart';
 import 'package:app_toko/layanan/aplikasi.dart';
+import 'package:app_toko/layanan/mode_latihan.dart';
 import 'package:app_toko/layanan/printer.dart';
 import 'package:app_toko/ui/akar.dart';
+import 'package:app_toko/ui/halaman/impor_stok.dart';
 import 'package:app_toko/ui/halaman/kasir.dart';
+import 'package:app_toko/ui/halaman/order.dart';
 import 'package:app_toko/ui/halaman/shift.dart';
 import 'package:app_toko/ui/halaman/transaksi.dart';
 import 'package:app_toko/ui/komponen/kerangka.dart';
 import 'package:app_toko/ui/komponen/umum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:excel/excel.dart' hide Border, BorderStyle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_core/pos_core.dart';
 
@@ -716,4 +720,196 @@ void main() {
     expect(find.text('Modal tetap kasir (Admin)'), findsNothing);
     s.app.keluar();
   });
+
+  // ------------------------------------------------------------------ revisi tahap 4 (G, J, mode latihan)
+
+  testWidgets('kasir: Order barang → (+), jumlah ±, simpan → PDF & Excel surat pesanan (G)', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    final c = s!.app.cabang;
+    final minyak = s.app.katalog.cariBarcode('8990002', c.id)!.id;
+    s.app.katalog.aturStokMinimum(minyak, c.id, 5, olehId: s.spv.id);
+    final tersimpan = <String, Uint8List>{};
+    simpanDokumenOrder = (nama, isi) async {
+      tersimpan[nama] = isi;
+      return 'C:\\Users\\Kasir\\Documents\\POS-Order\\$nama';
+    };
+    final dibuka = <String>[];
+    bukaFileOrder = (p) async {
+      dibuka.add(p);
+      return null;
+    };
+    addTearDown(() {
+      simpanDokumenOrder = simpanDiFolderOrder;
+      bukaFileOrder = (p) async => null;
+    });
+    s.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    expect(find.text('segera'), findsNothing);
+    await t.tap(find.text(MenuKasir.orderBarang.label));
+    await _tunggu(t);
+    expect(find.text('Perlu order saja (1)'), findsOneWidget);
+    expect(find.text('Minyak Goreng 2 L'), findsOneWidget);
+    expect(find.text('Gula Pasir 1 kg'), findsNothing, reason: 'filter "Perlu order saja" menyala karena ada yang perlu');
+    await t.tap(find.byKey(ValueKey('tambah-order-$minyak')));
+    await t.pump();
+    expect(find.byKey(ValueKey('baris-order-$minyak')), findsOneWidget);
+    expect(find.text('8'), findsWidgets, reason: 'saran 2 × 5 − 2 = 8');
+    await t.tap(find.byKey(const ValueKey('filter-perlu-order')));
+    await t.pump();
+    await t.enterText(find.byKey(const ValueKey('cari-order')), '8990003');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump();
+    expect(find.textContaining('2 jenis barang'), findsOneWidget, reason: 'scan barcode langsung masuk daftar');
+    await t.enterText(find.byKey(const ValueKey('catatan-order')), 'Kirim sebelum Sabtu');
+    await t.pump();
+    await _foto(t, '50-kasir-order-barang');
+    await t.tap(find.byKey(const ValueKey('simpan-order')));
+    await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
+    await _tunggu(t);
+    final no = 'ORD-A01-${kodeTanggal(DateTime.now())}-0001';
+    expect(find.text('Order $no tersimpan'), findsOneWidget);
+    expect(tersimpan.keys, ['$no.pdf', '$no.xlsx']);
+    expect(String.fromCharCodes(tersimpan['$no.pdf']!.take(5)), '%PDF-');
+    await _foto(t, '51-kasir-order-tersimpan');
+    await t.tap(find.text('Buka PDF'));
+    await t.pump();
+    expect(dibuka.single, endsWith('$no.pdf'));
+    await t.tap(find.text('Selesai'));
+    await _tunggu(t);
+    expect(find.textContaining('0 jenis barang'), findsOneWidget, reason: 'daftar order kosong lagi');
+    expect(s.app.katalog.stok(minyak, c.id), 2, reason: 'order tidak mengubah stok');
+    s.app.keluar();
+  });
+
+  testWidgets('admin: Impor stok awal dari Excel → pratinjau, baris salah ditandai, simpan (J)', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    final c = s!.app.cabang;
+    final e = Excel.createExcel();
+    e.rename(e.getDefaultSheet()!, 'Stok awal');
+    final sh = e['Stok awal'];
+    sh.appendRow([for (final k in kolomImporStok) TextCellValue(k)]);
+    for (final r in [
+      ['8990001', 'Gula Pasir 1 kg', 'Sembako', 'pak', 30, 16400, 17500],
+      ['8990201', 'Teh Celup isi 25', 'Minuman', 'kotak', 12, 4500, 6000],
+      ['8990202', 'Kopi Bubuk 200 g', 'Kopi', 'pcs', 6, 15000, 19000],
+      ['', 'Garam 250 g', 'Sembako', 'pcs', 10, 2000, 2000],
+    ]) {
+      sh.appendRow([for (final v in r) v is int ? IntCellValue(v) : TextCellValue('$v')]);
+    }
+    final file = Uint8List.fromList(e.encode()!);
+    pilihFileExcel = () async => ('stok-awal-contoh.xlsx', file);
+    String? template;
+    simpanTemplateExcel = (nama, isi) async => template = nama;
+    addTearDown(() {
+      pilihFileExcel = pilihFileExcelBawaan;
+      simpanTemplateExcel = simpanTemplateBawaan;
+    });
+    s.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.tap(find.text(MenuKasir.barangMasuk.label));
+    await _tunggu(t);
+    expect(find.byKey(const ValueKey('buka-impor-stok')), findsNothing, reason: 'kasir tidak boleh impor');
+    s.app.keluar();
+    s.app.masuk(s.admin);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.tap(find.text(MenuAdmin.barangMasuk.label).first);
+    await _tunggu(t);
+    await t.tap(find.byKey(const ValueKey('buka-impor-stok')));
+    await _tunggu(t);
+    await _foto(t, '52-admin-impor-awal');
+    await t.tap(find.byKey(const ValueKey('simpan-template')));
+    await _tunggu(t);
+    expect(template, 'Template-stok-awal-A01.xlsx');
+    await t.tap(find.byKey(const ValueKey('pilih-file-impor')));
+    await _tunggu(t);
+    expect(find.text('Kategori "Kopi" belum ada.'), findsOneWidget);
+    expect(find.text('Harga jual harus lebih besar dari HPP.'), findsOneWidget);
+    expect(find.textContaining('lewati 2'), findsOneWidget);
+    await _foto(t, '53-admin-impor-pratinjau');
+    await t.tap(find.byKey(const ValueKey('tambah-kategori-impor')));
+    await _tunggu(t);
+    await t.tap(find.text('Tambah kategori'));
+    await _tunggu(t);
+    expect(find.textContaining('lewati 1'), findsOneWidget, reason: 'setelah kategori ditambah, tinggal baris harga = HPP');
+    await t.pump(const Duration(seconds: 6)); // pesan "Template disimpan" hilang dulu
+    await t.pump(const Duration(seconds: 1));
+    await t.tap(find.byKey(const ValueKey('simpan-impor')));
+    await _tunggu(t);
+    await t.tap(find.text('Simpan').last);
+    await _tunggu(t);
+    await _tunggu(t);
+    expect(find.byKey(const ValueKey('simpan-impor')), findsNothing, reason: 'kembali ke Barang masuk');
+    expect(s.app.katalog.cariBarcode('8990001', c.id)!.stok, 50 - 12 + 30);
+    expect(s.app.katalog.cariBarcode('8990202', c.id)!.kategoriNama, 'Kopi');
+    expect(s.app.katalog.cari('Garam', c.id), isEmpty);
+    s.app.keluar();
+  });
+
+  testWidgets('mode latihan: SPV menyalakan dari layar masuk, pita oranye, struk LATIHAN, kembali ke data asli', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    final c = s!.app.cabang;
+    final gula = s.app.katalog.cariBarcode('8990001', c.id)!.id;
+    final mode = PengaturMode(asli: s.app, bukaDatabaseLatihan: () => DatabaseToko.memori(), hapusDatabaseLatihan: () {});
+    await _pasang(t, s.app);
+    expect(find.byKey(const ValueKey('pita-latihan')), findsNothing);
+    await _foto(t, '01b-masuk-tombol-latihan');
+    await t.tap(find.byKey(const ValueKey('nyalakan-latihan')));
+    await _tunggu(t);
+    expect(find.text('Perlu persetujuan SPV'), findsOneWidget);
+    await t.tap(find.byType(DropdownButtonFormField<Pengguna>).last);
+    await _tunggu(t);
+    await t.tap(find.text('Dewi (SPV)').last);
+    await _tunggu(t);
+    for (final d in '739104'.split('')) {
+      await t.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text(d)).first);
+      await t.pump();
+    }
+    await t.tap(find.text('Setujui'));
+    // Pemeriksaan PIN (hash) berjalan sungguhan di luar jam palsu test.
+    for (var i = 0; i < 20 && !mode.latihanAktif; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    await _tunggu(t);
+    expect(mode.latihanAktif, isTrue);
+    expect(find.byKey(const ValueKey('pita-latihan')), findsOneWidget);
+    expect(find.text('MODE LATIHAN'), findsOneWidget);
+    expect(find.text('Mode latihan menyala'), findsOneWidget);
+    await _foto(t, '54-masuk-mode-latihan');
+
+    final l = mode.aktif;
+    l.masuk(l.pengguna.ambil(s.kasir.id)!);
+    await _tunggu(t);
+    await _bukaShiftJikaPerlu(t, l);
+    await _keTransaksi(t);
+    await _scanMasuk(t, '8990001');
+    await _foto(t, '55-latihan-transaksi');
+    await t.sendKeyEvent(LogicalKeyboardKey.f12);
+    await _tunggu(t);
+    await t.enterText(find.descendant(of: find.byType(DialogBayar), matching: find.byType(TextField)), '20000');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await _tunggu(t);
+    expect(find.text('Transaksi selesai'), findsOneWidget);
+    await _foto(t, '56-latihan-struk-selesai');
+    final cetak = latin1.decode((s.app.printer as PrinterUji).riwayat.last);
+    expect(cetak, contains(teksStrukLatihan));
+    expect(l.katalog.stok(gula, c.id), 37, reason: 'stok latihan berkurang');
+    expect(s.app.katalog.stok(gula, c.id), 38, reason: 'stok asli tetap');
+
+    l.keluar();
+    await _tunggu(t);
+    await t.tap(find.byKey(const ValueKey('matikan-latihan')));
+    await _tunggu(t);
+    expect(mode.latihanAktif, isFalse);
+    expect(find.byKey(const ValueKey('pita-latihan')), findsNothing);
+    expect(find.byKey(const ValueKey('nyalakan-latihan')), findsOneWidget);
+  });
+}
+
+/// Kasir yang belum buka shift: buka shift lewat kotak shift di menu.
+Future<void> _bukaShiftJikaPerlu(WidgetTester t, Aplikasi app) async {
+  if (app.shiftAktif != null) return;
+  app.aturShift(app.penjualan.bukaShift(cabangId: app.cabang.id, kasirId: app.penggunaAktif!.id, modalAwal: 100000));
+  await t.pump(const Duration(milliseconds: 400));
 }

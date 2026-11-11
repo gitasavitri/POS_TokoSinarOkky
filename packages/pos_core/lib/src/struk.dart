@@ -339,6 +339,16 @@ List<BarisStruk> susunStrukRetur(DataStrukRetur d) {
   return b;
 }
 
+/// Tulisan di struk mode latihan.
+const teksStrukLatihan = 'LATIHAN - BUKAN STRUK ASLI';
+
+/// Tandai struk mode latihan: tulisan [teksStrukLatihan] tebal di paling atas dan paling bawah.
+List<BarisStruk> tandaiLatihan(List<BarisStruk> baris) => [
+      const BarisStruk(teksStrukLatihan, rata: Rata.tengah, tebal: true),
+      ...baris,
+      const BarisStruk(teksStrukLatihan, rata: Rata.tengah, tebal: true),
+    ];
+
 /// Teks polos struk (untuk pratinjau di layar dan untuk test).
 String strukSebagaiTeks(List<BarisStruk> baris) => baris
     .map((l) {

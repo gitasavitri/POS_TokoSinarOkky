@@ -6,6 +6,7 @@ import '../../data/model.dart';
 import '../../data/repo/barang_masuk_repo.dart';
 import '../../layanan/aplikasi.dart';
 import '../komponen/umum.dart';
+import 'impor_stok.dart';
 import '../tema.dart';
 
 const daftarSatuan = ['pcs', 'pak', 'pouch', 'botol', 'kaleng', 'renceng', 'bungkus', 'kg', 'liter', 'sak', 'dus', 'karton', 'lusin'];
@@ -188,6 +189,21 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
           ),
           const SizedBox(width: 16),
           SizedBox(height: 56, child: OutlinedButton.icon(onPressed: () => bukaRiwayatBarangMasuk(context), icon: const Icon(Icons.history), label: const Text('Riwayat & minta koreksi'))),
+          if (app.boleh(Izin.imporStokAwal)) ...[
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                key: const ValueKey('buka-impor-stok'),
+                onPressed: () async {
+                  await bukaImporStok(context);
+                  if (mounted) setState(() => _kategori = app.katalog.kategori());
+                },
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Impor stok awal (Excel)'),
+              ),
+            ),
+          ],
         ]),
       ),
       Expanded(

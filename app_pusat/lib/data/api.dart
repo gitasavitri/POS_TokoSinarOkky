@@ -19,6 +19,10 @@ abstract class ApiPusat {
   Future<void> simpanBarang({String? id, required String? barcode, required String nama, required String kategoriId, required String satuan, bool aktif = true});
   Future<void> aturBarangToko({required String cabangId, required String barangId, required bool dijual});
 
+  /// Salin daftar barang (rak) dari toko lain ke [keCabangId] (revisi I). [dariCabangId] null = semua barang.
+  /// Stok tidak ikut. Mengembalikan jumlah barang yang ditambahkan, yang sudah ada, dan harga yang ikut disalin.
+  Future<HasilSalinBarang> salinDaftarBarang({required String keCabangId, String? dariCabangId});
+
   /// Harga baru untuk semua toko. Mengembalikan peringatan (mis. harga ≤ HPP).
   Future<List<String>> ubahHarga({required String barangId, required int eceran, required List<TingkatGrosir> grosir, required String alasan});
   Future<List<BarangKembar>> barangKembar();
@@ -133,6 +137,12 @@ class ApiHttp implements ApiPusat {
   @override
   Future<void> aturBarangToko({required String cabangId, required String barangId, required bool dijual}) =>
       _minta('POST', '/api/pusat/barang-cabang', isi: {'cabang_id': cabangId, 'barang_id': barangId, 'aktif': dijual ? 1 : 0});
+
+  @override
+  Future<HasilSalinBarang> salinDaftarBarang({required String keCabangId, String? dariCabangId}) async {
+    final r = await _minta('POST', '/api/pusat/salin-daftar-barang', isi: {'ke_cabang_id': keCabangId, 'dari_cabang_id': dariCabangId});
+    return HasilSalinBarang.dariJson(r);
+  }
 
   @override
   Future<List<String>> ubahHarga({required String barangId, required int eceran, required List<TingkatGrosir> grosir, required String alasan}) async {

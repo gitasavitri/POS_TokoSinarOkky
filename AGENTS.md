@@ -46,7 +46,7 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 5. **Data transaksi dan riwayat hanya boleh ditambah, tidak boleh diubah atau dihapus.**
    Ini dijaga trigger di database. Tabelnya: `transaksi`, `transaksi_item`, `pembayaran`, `pembatalan`,
    `retur`, `retur_item`, `mutasi_stok`, `harga_jual`, `harga_grosir`, `hpp_barang`, `shift_tutup`, `log_aktivitas`,
-   `kas_shift`, `shift_hitung` (migrasi 002), `shift_belum_dihitung` (migrasi 003).
+   `kas_shift`, `shift_hitung` (migrasi 002), `shift_belum_dihitung` (migrasi 003), `order_barang`, `order_barang_item` (migrasi 005).
    Koreksi = baris baru, bukan mengubah baris lama.
 6. **Stok tidak disimpan sebagai angka yang di-update.** Stok = jumlah semua baris `mutasi_stok` (lihat view `stok_sekarang`).
 7. **Waktu disimpan sebagai teks ISO 8601 UTC**, misalnya `2026-11-05T06:09:00Z`. Tampilkan ke pengguna dalam WIB.
@@ -69,6 +69,9 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 | Lihat laporan | Tidak | Toko sendiri | Toko sendiri (app toko) / semua (app pusat) |
 | Atur printer di PC kasir | Tidak | Ya | Ya |
 | Kelola karyawan & hak akses | Tidak | Tidak | Ya |
+| Order barang ke toko utama / supplier | Ya | Ya | Ya |
+| Impor stok awal dari Excel | Tidak | Ya | Ya |
+| Nyalakan mode latihan (dari layar masuk, PIN) | Tidak | Ya | Ya |
 
 "PIN SPV" artinya kasir tetap bisa melakukannya setelah SPV memasukkan PIN-nya di layar yang sama.
 Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
@@ -122,6 +125,30 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Semua retur oleh kasir muncul di "Perlu dicek" SPV/Admin + `log_aktivitas` (aksi `retur`).
 - Struk dan pesan bawah struk **tidak boleh** menulis aturan tukar/retur.
 
+**Order barang (revisi G, 11 Nov 2026)**
+- Daftar barang toko + stok + stok minimum + saran. Saran = isi sampai **2× stok minimum** kalau stok ≤ minimum
+  (ASUMSI, lihat Keputusan terbuka). "Perlu order" = habis atau hampir habis (sama dengan Cek stok & harga).
+- Nomor order `ORD-<kode cabang>-<YYMMDD>-<urut 4 digit>`, urut per cabang per hari WIB. Order tidak mengubah stok.
+- Hasil: PDF "Surat Pesanan Barang" + Excel di `Documents\POS-Order`. Order disimpan di PC toko (`order_barang`), BELUM
+  dikirim ke pusat (hanya `log_aktivitas` aksi `buat_order`). Kirim order ke pusat lewat aplikasi menyusul.
+
+**Salin daftar barang (revisi I)**
+- Aplikasi Pusat → Toko & perangkat → "Salin dari toko lain": tulis `barang_cabang` toko tujuan (lewat tabel `perubahan`,
+  ikut sinkron ke PC toko). Stok TIDAK ikut. Stok minimum ikut dari toko asal. Barang yang belum punya harga di toko
+  tujuan memakai harga + grosir terbaru toko asal (`harga_jual.cabang_id` = toko tujuan, sumber `pusat`).
+
+**Impor stok awal dari Excel (revisi J)**
+- Hanya SPV/Admin, lewat Barang masuk. Kolom: Barcode, Nama barang, Kategori, Satuan, Jumlah, HPP, Harga jual.
+- Hasilnya SATU barang masuk biasa (terkirim & terkunci): stok, HPP rata-rata, harga, barang baru masuk `barang_cabang`.
+- Barcode yang sudah ada: hanya stok/HPP/harga; nama/kategori/satuan tidak diubah. Baris salah ditandai dan dilewati.
+
+**Mode latihan**
+- File database terpisah `pos_toko_latihan.db` (salinan barang, harga, HPP, stok, akun, pengaturan printer; TANPA
+  alamat server/token). Tidak ada sinkron dan cadangan. Data asli tetap sinkron di belakang.
+- Pita oranye "MODE LATIHAN" di semua layar. Semua cetakan bertulisan `LATIHAN - BUKAN STRUK ASLI`; struk latihan
+  **tanpa barcode** (nomor TRX latihan bisa sama dengan nomor asli).
+- Aplikasi dibuka ulang → selalu data asli. "Hapus data latihan" = hapus file lalu salin ulang dari data asli.
+
 **Struk**
 - Kertas 58 mm, 32 karakter per baris, dicetak dengan perintah ESC/POS.
 - Isi: nama toko, cabang, alamat, no. transaksi, tanggal (WIB), kasir, daftar barang (`qty x harga`, tanda `*G` untuk harga grosir), total, bayar, kembali, pesan bawah struk, barcode nomor transaksi.
@@ -157,3 +184,4 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - [ ] Cara menghitung HPP (sementara: rata-rata tertimbang)
 - [ ] Siapa boleh menambah kategori (saran: Admin saja)
 - [ ] Batas penurunan harga tanpa PIN SPV (sementara: 10%)
+- [ ] Rumus saran order (sementara: isi sampai 2× stok minimum)

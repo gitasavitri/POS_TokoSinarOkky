@@ -98,6 +98,9 @@ export function buatApp(pool, { trustProxy = false, catatGalat = console.error, 
     await transaksi(pool, (kon) => pusat.aturBarangCabang(kon, req.body ?? {}, req.admin.id));
     res.json({ ok: true });
   });
+  r.post('/salin-daftar-barang', async (req, res) =>
+    res.json(await transaksi(pool, (kon) => pusat.salinDaftarBarang(kon, req.body ?? {}, req.admin.id))),
+  );
   r.post('/harga', async (req, res) => res.status(201).json(await pusat.ubahHargaPusatTransaksi(pool, req.body ?? {}, req.admin.id)));
 
   r.get('/ringkasan', async (req, res) => res.json(await pusat.ringkasan(pool, req.query)));

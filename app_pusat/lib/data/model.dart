@@ -272,3 +272,17 @@ class BarangKembar {
   final String nama;
   final DateTime dibuat;
 }
+
+/// Hasil salin daftar barang ke toko lain (revisi I).
+class HasilSalinBarang {
+  const HasilSalinBarang({required this.ditambah, required this.sudahAda, required this.hargaDisalin});
+  final int ditambah;
+  final int sudahAda;
+  final int hargaDisalin;
+
+  static HasilSalinBarang dariJson(Map<String, Object?> j) => HasilSalinBarang(
+        ditambah: (j['ditambah'] as num?)?.toInt() ?? 0,
+        sudahAda: (j['sudah_ada'] as num?)?.toInt() ?? 0,
+        hargaDisalin: (j['harga_disalin'] as num?)?.toInt() ?? 0,
+      );
+}

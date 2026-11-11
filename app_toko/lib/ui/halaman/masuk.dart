@@ -69,6 +69,87 @@ class _HalamanMasukState extends State<HalamanMasuk> {
     }
   }
 
+  // ---------------------------------------------------------------- mode latihan
+
+  Future<void> _nyalakanLatihan() async {
+    final mode = context.app.pengaturMode;
+    if (mode == null) return;
+    final p = await mintaPinSpv(context, alasan: 'Nyalakan mode latihan: data salinan, tidak masuk stok asli, laporan, dan pusat.');
+    if (p == null || !mounted) return;
+    try {
+      mode.nyalakan(p);
+    } catch (e) {
+      if (mounted) tampilkanPesan(context, 'Mode latihan gagal dinyalakan: ${pesanGalat(e)}', galat: true);
+    }
+  }
+
+  Future<void> _hapusLatihan() async {
+    final mode = context.app.pengaturMode;
+    if (mode == null) return;
+    final ok = await konfirmasi(
+      context,
+      judul: 'Hapus data latihan?',
+      isi: 'Semua transaksi, shift, dan perubahan di mode latihan dihapus. Barang, harga, dan stok disalin ulang dari data asli. '
+          'Data asli tidak terpengaruh.',
+      ya: 'Hapus data latihan',
+      bahaya: true,
+    );
+    if (!ok || !mounted) return;
+    final p = await mintaPinSpv(context, alasan: 'Hapus data latihan perlu persetujuan SPV / Admin.');
+    if (p == null || !mounted) return;
+    try {
+      mode.hapusDataLatihan(p);
+    } catch (e) {
+      if (mounted) tampilkanPesan(context, 'Gagal menghapus data latihan: ${pesanGalat(e)}', galat: true);
+    }
+  }
+
+  /// Tombol mode latihan (data asli) atau kotak "Mode latihan menyala" (data latihan).
+  Widget _kotakLatihan(Aplikasi app) {
+    final mode = app.pengaturMode;
+    if (mode == null) return const SizedBox();
+    if (!app.latihan) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const ValueKey('nyalakan-latihan'),
+          onPressed: _nyalakanLatihan,
+          style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white, backgroundColor: Colors.transparent, side: const BorderSide(color: Color(0xFF9ED0FF)), minimumSize: const Size(48, 52)),
+          icon: const Icon(Icons.school),
+          label: const Text('Mode latihan (SPV/Admin)', style: TextStyle(fontSize: 17)),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('Mode latihan menyala', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        const Text('Masuk dengan akun seperti biasa. Data latihan tetap tersimpan sampai dihapus.',
+            style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4)),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          key: const ValueKey('matikan-latihan'),
+          onPressed: mode.matikan,
+          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Warna.pitaLatihan, minimumSize: const Size(48, 52)),
+          icon: const Icon(Icons.logout),
+          label: const Text('Kembali ke data asli', style: TextStyle(fontSize: 17)),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          key: const ValueKey('hapus-latihan'),
+          onPressed: _hapusLatihan,
+          style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white, backgroundColor: Colors.transparent, side: const BorderSide(color: Colors.white70), minimumSize: const Size(48, 48)),
+          icon: const Icon(Icons.delete_sweep),
+          label: const Text('Hapus data latihan', style: TextStyle(fontSize: 16)),
+        ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.app;
@@ -77,8 +158,14 @@ class _HalamanMasukState extends State<HalamanMasuk> {
       body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           width: 460,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Warna.utamaTua, Warna.utama, Warna.utamaTerang]),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: app.latihan
+                  ? const [Color(0xFF9A3412), Warna.pitaLatihan, Color(0xFFEA580C)]
+                  : const [Warna.utamaTua, Warna.utama, Warna.utamaTerang],
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(48, 56, 48, 40),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -96,6 +183,10 @@ class _HalamanMasukState extends State<HalamanMasuk> {
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
             ),
             const Spacer(),
+            _kotakLatihan(app),
+            // Di mode latihan kotaknya lebih tinggi; info keamanan akun disembunyikan supaya muat.
+            if (!app.latihan) ...[
+            const SizedBox(height: 24),
             const Text('Keamanan akun', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             for (final t in const [
@@ -114,6 +205,7 @@ class _HalamanMasukState extends State<HalamanMasuk> {
                   Expanded(child: Text(t, style: const TextStyle(color: Color(0xFFEAF4FF), fontSize: 17.5, height: 1.45))),
                 ]),
               ),
+            ],
           ]),
         ),
         Expanded(

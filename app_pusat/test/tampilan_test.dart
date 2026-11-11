@@ -160,6 +160,36 @@ void main() {
     await sesi.keluar();
   });
 
+  testWidgets('toko & perangkat: salin daftar barang dari toko lain ke toko baru (I)', (t) async {
+    final (sesi, api) = await _pasang(t);
+    await t.tap(_ubin(MenuPusat.toko));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.byKey(const ValueKey('salin-barang-c3')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300)); // animasi dialog
+    expect(find.text('Salin daftar barang ke C03 · Contoh Tiga'), findsOneWidget);
+    expect(find.textContaining('STOK TIDAK IKUT'), findsOneWidget);
+    await _foto(t, '40-salin-daftar-barang');
+    await t.tap(find.byKey(const ValueKey('salin-barang-ya')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(api.salinan.single, (ke: 'c3', dari: 'c1'));
+    expect(find.textContaining('120 barang ditambahkan ke daftar toko C03'), findsOneWidget);
+    await _foto(t, '41-salin-daftar-barang-selesai');
+
+    await t.tap(find.byKey(const ValueKey('salin-barang-c3')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.byKey(const ValueKey('salin-dari')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.text('Semua barang (dari semua toko)').last);
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.byKey(const ValueKey('salin-barang-ya')));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(api.salinan.last, (ke: 'c3', dari: null), reason: 'semua barang = tanpa toko asal');
+    await sesi.keluar();
+  });
+
   testWidgets('sesi habis di server → kembali ke layar masuk dengan pesan', (t) async {
     final (sesi, api) = await _pasang(t);
     api.sesiHabis = true;

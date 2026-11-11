@@ -156,7 +156,6 @@ class MenuBerandaKasir extends StatelessWidget {
                 warna: m.warna,
                 latar: m.latar,
                 utama: m == MenuKasir.transaksi,
-                lencana: m == MenuKasir.orderBarang ? 'segera' : null,
                 onTap: () => onMenu(m),
               ),
         ];

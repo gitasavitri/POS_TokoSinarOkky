@@ -75,6 +75,20 @@ class _IsiTokoState extends State<IsiToko> {
     }
   }
 
+  /// Revisi I: salin daftar barang (rak) dari toko lain ke toko baru, supaya bisa langsung order.
+  Future<void> _salinBarang(CabangPusat ke, List<CabangPusat> semua) async {
+    final lain = semua.where((c) => c.id != ke.id).toList();
+    final hasil = await showDialog<HasilSalinBarang>(context: context, builder: (_) => _DialogSalinBarang(ke: ke, tokoLain: lain));
+    if (hasil == null || !mounted) return;
+    tampilkanPesan(
+      context,
+      '${hasil.ditambah} barang ditambahkan ke daftar toko ${ke.kode}'
+      '${hasil.sudahAda > 0 ? ' (${hasil.sudahAda} sudah ada)' : ''}'
+      '${hasil.hargaDisalin > 0 ? ', ${hasil.hargaDisalin} harga ikut disalin' : ''}. '
+      'Masuk ke PC toko itu otomatis dalam ±1 menit.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Muat<(List<CabangPusat>, List<PerangkatPusat>)>(
         key: ValueKey(_versi),
@@ -97,8 +111,8 @@ class _IsiTokoState extends State<IsiToko> {
               child: cabang.isEmpty
                   ? const Padding(padding: EdgeInsets.all(20), child: Text('Belum ada toko.', style: TextStyle(fontSize: 17, color: Warna.teksPudar)))
                   : TabelSederhana(
-                      kolom: const ['Kode', 'Nama', 'Alamat', 'PC aktif', 'Data terakhir'],
-                      lebar: const [1, 3, 5, 2, 3],
+                      kolom: const ['Kode', 'Nama', 'Alamat', 'PC aktif', 'Data terakhir', 'Daftar barang'],
+                      lebar: const [1, 3, 4, 2, 3, 3],
                       rataKanan: const {3},
                       baris: [
                         for (final c in cabang)
@@ -110,6 +124,13 @@ class _IsiTokoState extends State<IsiToko> {
                               Text(c.alamat, style: const TextStyle(fontSize: 15.5)),
                               Text('${c.jumlahPerangkat}', style: gayaSel),
                               Text(teks, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: warna)),
+                              OutlinedButton.icon(
+                                key: ValueKey('salin-barang-${c.id}'),
+                                onPressed: cabang.length < 2 ? null : () => _salinBarang(c, cabang),
+                                style: OutlinedButton.styleFrom(minimumSize: const Size(48, 44), padding: const EdgeInsets.symmetric(horizontal: 10)),
+                                icon: const Icon(Icons.copy_all, size: 20),
+                                label: const Text('Salin dari toko lain'),
+                              ),
                             ];
                           }(),
                       ],
@@ -145,5 +166,76 @@ class _IsiTokoState extends State<IsiToko> {
             ),
           ]);
         },
+      );
+}
+
+class _DialogSalinBarang extends StatefulWidget {
+  const _DialogSalinBarang({required this.ke, required this.tokoLain});
+  final CabangPusat ke;
+  final List<CabangPusat> tokoLain;
+  @override
+  State<_DialogSalinBarang> createState() => _DialogSalinBarangState();
+}
+
+class _DialogSalinBarangState extends State<_DialogSalinBarang> {
+  /// '' = semua barang.
+  late String _dari = widget.tokoLain.isEmpty ? '' : widget.tokoLain.first.id;
+  bool _sibuk = false;
+  String? _galat;
+
+  Future<void> _salin() async {
+    setState(() {
+      _sibuk = true;
+      _galat = null;
+    });
+    try {
+      final h = await context.sesi.pakai((api) => api.salinDaftarBarang(keCabangId: widget.ke.id, dariCabangId: _dari.isEmpty ? null : _dari));
+      if (mounted) Navigator.pop(context, h);
+    } on GalatServer catch (e) {
+      if (mounted) {
+        setState(() {
+          _sibuk = false;
+          _galat = e.pesan;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text('Salin daftar barang ke ${widget.ke.kode} · ${widget.ke.nama}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        content: SizedBox(
+          width: 560,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            DropdownButtonFormField<String>(
+              key: const ValueKey('salin-dari'),
+              initialValue: _dari,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Salin daftar barang dari'),
+              style: const TextStyle(fontSize: 18, color: Warna.teks, fontFamily: fontUtama),
+              items: [
+                for (final c in widget.tokoLain) DropdownMenuItem(value: c.id, child: Text('${c.kode} · ${c.nama}')),
+                const DropdownMenuItem(value: '', child: Text('Semua barang (dari semua toko)')),
+              ],
+              onChanged: _sibuk ? null : (v) => setState(() => _dari = v ?? ''),
+            ),
+            const SizedBox(height: 14),
+            const KotakPesan(
+              'Barang ditambahkan ke daftar barang toko tujuan, supaya bisa langsung dipesan lewat Order barang. '
+              'STOK TIDAK IKUT (stok toko tujuan tetap, diisi lewat Barang masuk). Stok minimum ikut dari toko asal. '
+              'Barang yang belum punya harga di toko tujuan ikut memakai harga toko asal. Barang yang sudah ada dilewati.',
+            ),
+            if (_galat != null) ...[const SizedBox(height: 12), KotakPesan(_galat!, jenis: JenisPesan.galat)],
+          ]),
+        ),
+        actions: [
+          OutlinedButton(onPressed: _sibuk ? null : () => Navigator.pop(context), child: const Text('Batal')),
+          FilledButton.icon(
+            key: const ValueKey('salin-barang-ya'),
+            onPressed: _sibuk ? null : _salin,
+            icon: const Icon(Icons.copy_all),
+            label: Text(_sibuk ? 'Menyalin…' : 'Salin daftar barang'),
+          ),
+        ],
       );
 }

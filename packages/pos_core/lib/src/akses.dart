@@ -42,6 +42,15 @@ enum Izin {
 
   /// Mengatur modal tetap toko (uang yang tetap di kasir saat shift ditutup "Belum dihitung", revisi P).
   aturModalTetap,
+
+  /// Membuat order barang ke toko utama / supplier (revisi G).
+  buatOrder,
+
+  /// Impor stok awal dari Excel lewat Barang masuk (revisi J).
+  imporStokAwal,
+
+  /// Menyalakan mode latihan dari layar masuk (PIN SPV/Admin).
+  nyalakanLatihan,
 }
 
 enum Akses {
@@ -68,6 +77,7 @@ Akses aksesUntuk(Peran peran, Izin izin) {
         case Izin.ubahHargaNaik:
         case Izin.mintaKoreksiBarangMasuk:
         case Izin.lihatStok:
+        case Izin.buatOrder:
         // Revisi F: kasir boleh tukar/retur sendiri; batas 3 hari dicek lewat aksesRetur (retur.dart).
         case Izin.terimaRetur:
           return Akses.ya;
@@ -82,6 +92,8 @@ Akses aksesUntuk(Peran peran, Izin izin) {
         case Izin.lihatHpp:
         case Izin.hitungShiftMenunggu:
         case Izin.aturModalTetap:
+        case Izin.imporStokAwal:
+        case Izin.nyalakanLatihan:
           return Akses.tidak;
       }
   }

@@ -199,6 +199,52 @@ describe('Server Pusat', { skip: lewati }, () => {
     assert.equal(r.perubahan.length, 0);
   });
 
+  test('salin daftar barang dari toko A ke toko B (revisi I): stok tidak ikut, harga toko A disalin bila B belum punya', async () => {
+    const tanpaToken = await minta('POST', '/api/pusat/salin-daftar-barang', { isi: { ke_cabang_id: B.cabang.id, dari_cabang_id: A.cabang.id } });
+    assert.equal(tanpaToken.status, 401);
+    const sama = await minta('POST', '/api/pusat/salin-daftar-barang', { token: tokenAdmin, isi: { ke_cabang_id: B.cabang.id, dari_cabang_id: B.cabang.id } });
+    assert.equal(sama.status, 400);
+
+    const { kursor } = await ambil('B');
+    const [[mutasiSebelum]] = await db.pool.query('SELECT COUNT(*) AS n FROM mutasi_stok WHERE cabang_id = ?', [B.cabang.id]);
+    const r = await minta('POST', '/api/pusat/salin-daftar-barang', { token: tokenAdmin, isi: { ke_cabang_id: B.cabang.id, dari_cabang_id: A.cabang.id } });
+    assert.equal(r.status, 200, JSON.stringify(r.isi));
+    assert.deepEqual(r.isi, { ditambah: 1, sudah_ada: 0, harga_disalin: 1 });
+
+    const [[bc]] = await db.pool.query('SELECT aktif, stok_minimum FROM barang_cabang WHERE cabang_id = ? AND barang_id = ?', [B.cabang.id, A.barang.id]);
+    assert.deepEqual(bc, { aktif: 1, stok_minimum: 5 }, 'stok minimum ikut dari toko A');
+    const [[mutasiSesudah]] = await db.pool.query('SELECT COUNT(*) AS n FROM mutasi_stok WHERE cabang_id = ?', [B.cabang.id]);
+    assert.equal(mutasiSesudah.n, mutasiSebelum.n, 'stok tidak ikut');
+
+    const p = await ambil('B', kursor);
+    const bcB = p.perubahan.find((x) => x.tabel === 'barang_cabang' && x.baris.barang_id === A.barang.id);
+    assert.equal(bcB?.baris.cabang_id, B.cabang.id, 'daftar barang terkirim ke PC toko B');
+    const hj = p.perubahan.find((x) => x.tabel === 'harga_jual' && x.baris.barang_id === A.barang.id);
+    assert.equal(hj?.baris.cabang_id, B.cabang.id);
+    assert.equal(hj.baris.harga, A.harga.harga);
+    assert.equal(hj.baris.sumber, 'pusat');
+    const g = p.perubahan.find((x) => x.tabel === 'harga_grosir' && x.baris.harga_jual_id === hj.baris.id);
+    assert.equal(g?.baris.min_qty, 10);
+    assert.ok((await ambil('A')).perubahan.every((x) => x.baris.cabang_id !== B.cabang.id), 'toko A tidak menerima data toko B');
+
+    const ulang = await minta('POST', '/api/pusat/salin-daftar-barang', { token: tokenAdmin, isi: { ke_cabang_id: B.cabang.id, dari_cabang_id: A.cabang.id } });
+    assert.deepEqual(ulang.isi, { ditambah: 0, sudah_ada: 1, harga_disalin: 0 }, 'aman diulang');
+
+    // Toko baru C (belum punya barang): "semua barang" = semua barang aktif, stok minimum 0, tanpa harga.
+    const C = tokoContoh('C03');
+    await db.pool.query('INSERT INTO cabang (id, kode, nama, alamat, pesan_struk, aktif, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)', [
+      C.cabang.id, 'C03', 'Contoh C03', '', '', 1, C.cabang.created_at, C.cabang.updated_at,
+    ]);
+    const semua = await minta('POST', '/api/pusat/salin-daftar-barang', { token: tokenAdmin, isi: { ke_cabang_id: C.cabang.id, dari_cabang_id: null } });
+    assert.equal(semua.status, 200, JSON.stringify(semua.isi));
+    const [[jumlahBarang]] = await db.pool.query('SELECT COUNT(*) AS n FROM barang WHERE aktif = 1');
+    assert.deepEqual(semua.isi, { ditambah: jumlahBarang.n, sudah_ada: 0, harga_disalin: 0 });
+    const [[minC]] = await db.pool.query('SELECT MAX(stok_minimum) AS m FROM barang_cabang WHERE cabang_id = ?', [C.cabang.id]);
+    assert.equal(minC.m, 0);
+    const [[log]] = await db.pool.query("SELECT COUNT(*) AS n FROM log_aktivitas WHERE aksi = 'salin_daftar_barang'");
+    assert.equal(log.n, 3);
+  });
+
   test('harga pusat: dicek aturan grosir, lalu dikirim ke semua toko', async () => {
     const salah = await minta('POST', '/api/pusat/harga', {
       token: tokenAdmin,

@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Ruang kosong di disk tempat [path] berada, dalam byte. null kalau tidak bisa dibaca (atau bukan Windows).
 int? ruangKosong(String path) {
@@ -45,5 +46,30 @@ class CatatanGalat {
     } catch (_) {
       // Mencatat galat tidak boleh membuat aplikasi ikut galat.
     }
+  }
+}
+
+/// Folder dokumen di Documents, mis. Documents\POS-Order. Dibuat kalau belum ada.
+Future<String> folderDokumen(String nama) async {
+  final d = await getApplicationDocumentsDirectory();
+  final f = Directory('${d.path}${Platform.pathSeparator}$nama');
+  await f.create(recursive: true);
+  return f.path;
+}
+
+/// Buka file atau folder dengan program bawaan Windows (PDF viewer, Excel, File Explorer).
+/// Mengembalikan pesan galat, atau null kalau berhasil.
+Future<String?> bukaDenganProgramBawaan(String path) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.start('explorer.exe', [path], mode: ProcessStartMode.detached);
+    } else if (Platform.isMacOS) {
+      await Process.start('open', [path], mode: ProcessStartMode.detached);
+    } else {
+      await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
+    }
+    return null;
+  } catch (e) {
+    return 'Tidak bisa membuka $path: $e';
   }
 }

@@ -9,14 +9,17 @@ import '../data/database.dart';
 import '../data/model.dart';
 import '../data/repo/barang_masuk_repo.dart';
 import '../data/repo/harga_repo.dart';
+import '../data/repo/impor_repo.dart';
 import '../data/repo/katalog_repo.dart';
 import '../data/repo/laporan_repo.dart';
+import '../data/repo/order_repo.dart';
 import '../data/repo/pemulihan_repo.dart';
 import '../data/repo/pengaturan_repo.dart';
 import '../data/repo/pengguna_repo.dart';
 import '../data/repo/penjualan_repo.dart';
 import '../data/repo/setup_repo.dart';
 import 'cadangan.dart';
+import 'mode_latihan.dart';
 import 'printer.dart';
 import 'sinkron.dart';
 import 'sistem.dart';
@@ -26,7 +29,7 @@ const batasDiam = Duration(minutes: 10);
 
 /// Semua layanan aplikasi + sesi pengguna yang sedang masuk.
 class Aplikasi extends ChangeNotifier {
-  Aplikasi({required this.db, required this.printer, this.lokasiDatabase, String? folderCadangan, this.catatan})
+  Aplikasi({required this.db, required this.printer, this.lokasiDatabase, String? folderCadangan, this.catatan, this.latihan = false})
       : folderCadangan = folderCadangan ?? '${Directory.systemTemp.path}${Platform.pathSeparator}POS-Cadangan',
         pemulihan = PemulihanRepo(db),
         pengaturan = PengaturanRepo(db),
@@ -36,6 +39,8 @@ class Aplikasi extends ChangeNotifier {
         barangMasuk = BarangMasukRepo(db),
         harga = HargaRepo(db),
         laporan = LaporanRepo(db),
+        order = OrderRepo(db),
+        impor = ImporRepo(db),
         setup = SetupRepo(db),
         sinkron = LayananSinkron(db);
 
@@ -63,6 +68,19 @@ class Aplikasi extends ChangeNotifier {
   final HargaRepo harga;
   final LaporanRepo laporan;
   final SetupRepo setup;
+
+  /// Order barang ke toko utama / supplier (revisi G).
+  final OrderRepo order;
+
+  /// Impor stok awal dari Excel (revisi J).
+  final ImporRepo impor;
+
+  /// true = aplikasi ini memakai database MODE LATIHAN (file terpisah, tidak terkirim ke pusat,
+  /// tidak dicadangkan, struk bertulisan LATIHAN).
+  final bool latihan;
+
+  /// Pengatur pindah ke / dari mode latihan. null = fitur mode latihan tidak tersedia (mis. di test).
+  PengaturMode? pengaturMode;
 
   /// Kirim data ke Server Pusat & ambil harga/barang dari pusat (otomatis tiap menit kalau sudah didaftarkan).
   final LayananSinkron sinkron;
@@ -128,9 +146,13 @@ class Aplikasi extends ChangeNotifier {
   int get salinanStruk => pengaturan.ambilInt(PengaturanRepo.kSalinanStruk, bawaan: 1).clamp(1, 3);
 
   /// Cetak byte ke printer yang dipilih. Mengembalikan pesan galat atau null kalau berhasil.
-  Future<String?> kirimKePrinter(List<int> data, {int salinan = 1}) async {
+  /// Di mode latihan, semua cetakan diberi tulisan LATIHAN di atasnya (kecuali [sudahDitandai]).
+  Future<String?> kirimKePrinter(List<int> data, {int salinan = 1, bool sudahDitandai = false}) async {
     final nama = namaPrinter;
     if (nama == null) return 'Belum ada printer yang dipilih. Atur di Pengaturan.';
+    if (latihan && !sudahDitandai) {
+      data = [...cetakBaris(const [BarisStruk(teksStrukLatihan, rata: Rata.tengah, tebal: true)], majuAkhir: 0), ...data];
+    }
     try {
       for (var i = 0; i < salinan; i++) {
         await printer.cetak(nama, data is Uint8List ? data : Uint8List.fromList(data));
@@ -143,16 +165,24 @@ class Aplikasi extends ChangeNotifier {
     }
   }
 
-  Future<String?> cetakStrukTransaksi(DataStruk d, {bool ulang = false}) =>
-      kirimKePrinter(cetakStruk(d, potongKertas: potongKertas), salinan: ulang ? 1 : salinanStruk);
+  Future<String?> cetakStrukTransaksi(DataStruk d, {bool ulang = false}) => kirimKePrinter(
+        cetakStruk(d, potongKertas: potongKertas, latihan: latihan),
+        salinan: ulang ? 1 : salinanStruk,
+        sudahDitandai: true,
+      );
 
   /// Struk retur (RTR-…), selalu 1 salinan.
-  Future<String?> cetakRetur(DataStrukRetur d) => kirimKePrinter(cetakStrukRetur(d, potongKertas: potongKertas));
+  Future<String?> cetakRetur(DataStrukRetur d) =>
+      kirimKePrinter(cetakStrukRetur(d, potongKertas: potongKertas, latihan: latihan), sudahDitandai: true);
+
+  /// Baris struk untuk pratinjau di layar (bertanda LATIHAN di mode latihan).
+  List<BarisStruk> pratinjauStruk(List<BarisStruk> baris) => latihan ? tandaiLatihan(baris) : baris;
 
   // ---------------------------------------------------------------- cadangan
 
   /// Buat cadangan sekarang (VACUUM INTO, aman walau aplikasi sedang dipakai). Mengembalikan path file.
   String cadangkan() {
+    if (latihan) return '(mode latihan: tidak dicadangkan)';
     final f = cadangan.buat(cabang.kode);
     pengaturan.simpan(PengaturanRepo.kCadanganTerakhir, db.sekarangIso());
     _galatCadangan = null;
@@ -173,6 +203,7 @@ class Aplikasi extends ChangeNotifier {
   }
 
   void jalankanTugasLatar() {
+    if (latihan) return;
     if (lokasiDatabase != null) _ruangKosong = ruangKosong(lokasiDatabase!);
     if (!sudahDisiapkan) return;
     final terakhir = DateTime.tryParse(pengaturan.ambil(PengaturanRepo.kCadanganTerakhir) ?? '');

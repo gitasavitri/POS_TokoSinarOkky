@@ -41,6 +41,9 @@ dependencies:
     path: ../packages/pos_core
   pos_ui:
     path: ../packages/pos_ui
+  pdf: ^3.12.0
+  excel: ^4.0.6
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

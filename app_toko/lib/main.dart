@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'data/database.dart';
 import 'layanan/aplikasi.dart';
+import 'layanan/mode_latihan.dart';
 import 'layanan/printer.dart';
 import 'layanan/sistem.dart';
 import 'ui/akar.dart';
@@ -51,6 +52,18 @@ Future<void> main() async {
       return;
     }
     final app = Aplikasi(db: db!, printer: LayananPrinter.untukSistemIni(), lokasiDatabase: lokasi, folderCadangan: cadangan, catatan: catatan);
+    // Mode latihan: database terpisah di folder yang sama. Selalu mulai dari data asli saat aplikasi dibuka.
+    final lokasiLatihan = '${folder.path}${s}pos_toko_latihan.db';
+    PengaturMode(
+      asli: app,
+      bukaDatabaseLatihan: () => DatabaseToko.buka(lokasiLatihan),
+      hapusDatabaseLatihan: () {
+        for (final akhiran in const ['', '-wal', '-shm']) {
+          final f = File('$lokasiLatihan$akhiran');
+          if (f.existsSync()) f.deleteSync();
+        }
+      },
+    );
     app.sinkron.mulai(); // tidak melakukan apa-apa sebelum PC ini didaftarkan ke Server Pusat
     app.mulaiTugasLatar(); // cadangan tiap jam + cek ruang disk
     runApp(AplikasiToko(app: app));

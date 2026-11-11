@@ -11,6 +11,7 @@ import 'halaman/kasir.dart';
 import 'halaman/koreksi.dart';
 import 'halaman/laporan.dart';
 import 'halaman/masuk.dart';
+import 'halaman/order.dart';
 import 'halaman/pengaturan.dart';
 import 'halaman/penjualan_shift.dart';
 import 'halaman/produk.dart';
@@ -31,38 +32,76 @@ class AplikasiToko extends StatefulWidget {
 }
 
 class _AplikasiTokoState extends State<AplikasiToko> {
+  /// Aplikasi yang sedang dipakai: data asli, atau data latihan kalau mode latihan menyala.
+  Aplikasi get _aktif => widget.app.pengaturMode?.aktif ?? widget.app;
+
   bool _tombol(KeyEvent _) {
-    widget.app.adaAktivitas();
+    _aktif.adaAktivitas();
     return false;
   }
+
+  void _gantiMode() => setState(() {});
 
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_tombol);
+    widget.app.pengaturMode?.addListener(_gantiMode);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_tombol);
+    widget.app.pengaturMode?.removeListener(_gantiMode);
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AplikasiScope(
-        aplikasi: widget.app,
-        child: MaterialApp(
-          title: 'POS Toko',
-          debugShowCheckedModeBanner: false,
-          theme: buatTema(),
-          builder: (context, child) => Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) => widget.app.adaAktivitas(),
-            child: child,
-          ),
-          home: const _Akar(),
+  Widget build(BuildContext context) {
+    final app = _aktif;
+    return AplikasiScope(
+      // Kunci berbeda per mode: semua layar dibuat ulang saat pindah ke / dari mode latihan.
+      key: ValueKey(app.latihan),
+      aplikasi: app,
+      child: MaterialApp(
+        title: app.latihan ? 'POS Toko · MODE LATIHAN' : 'POS Toko',
+        debugShowCheckedModeBanner: false,
+        theme: buatTema(),
+        builder: (context, child) => Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => app.adaAktivitas(),
+          child: app.latihan ? PitaLatihan(child: child!) : child,
         ),
-      );
+        home: const _Akar(),
+      ),
+    );
+  }
+}
+
+/// Pita oranye "MODE LATIHAN" di atas seluruh layar (termasuk dialog).
+class PitaLatihan extends StatelessWidget {
+  const PitaLatihan({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Material(
+          key: const ValueKey('pita-latihan'),
+          color: Warna.pitaLatihan,
+          child: const SizedBox(
+            height: 34,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.school, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('MODE LATIHAN', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+              SizedBox(width: 14),
+              Text('Transaksi tidak mengubah stok asli, tidak masuk laporan, dan tidak terkirim ke pusat',
+                  style: TextStyle(color: Colors.white, fontSize: 15)),
+            ]),
+          ),
+        ),
+        Expanded(child: child),
+      ]);
 }
 
 class _Akar extends StatelessWidget {
@@ -79,7 +118,7 @@ class _Akar extends StatelessWidget {
 }
 
 /// Kasir: menu ikon (revisi B). Transaksi, penjualan shift sendiri, cetak ulang struk, cek stok & harga,
-/// barang masuk, ubah harga, minta koreksi, order barang (menyusul), tutup shift.
+/// barang masuk, ubah harga, minta koreksi, order barang (revisi G), tutup shift.
 /// Kembali ke menu atau keluar tidak menutup shift.
 class _AlurKasir extends StatefulWidget {
   const _AlurKasir({super.key});
@@ -108,8 +147,6 @@ class _AlurKasirState extends State<_AlurKasir> {
     switch (m) {
       case MenuKasir.mintaKoreksi:
         return bukaRiwayatBarangMasuk(context);
-      case MenuKasir.orderBarang:
-        return tampilkanPesan(context, 'Order barang menyusul (revisi G, tahap 4).');
       case MenuKasir.tutupShift:
         if (app.shiftAktif == null) return tampilkanPesan(context, 'Belum ada shift yang dibuka.', galat: true);
         final selesai = await tutupShiftDialog(context);
@@ -162,6 +199,7 @@ class _AlurKasirState extends State<_AlurKasir> {
       MenuKasir.cekStok => const IsiCekStok(),
       MenuKasir.barangMasuk => const IsiBarangMasuk(),
       MenuKasir.ubahHarga => const IsiUbahHarga(),
+      MenuKasir.orderBarang => const IsiOrderBarang(),
       _ => const SizedBox(),
     };
     return KerangkaMenu(
@@ -244,6 +282,7 @@ class _HalamanAdminState extends State<HalamanAdmin> {
       MenuAdmin.ubahHarga => const IsiUbahHarga(),
       MenuAdmin.koreksi => const IsiKoreksi(),
       MenuAdmin.produk => const IsiProduk(),
+      MenuAdmin.order => const IsiOrderBarang(),
       MenuAdmin.retur => IsiRetur(
           onTukar: (d) => setState(() {
             _isi = KeTransaksi.tukar(d);

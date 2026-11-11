@@ -69,6 +69,14 @@ class ApiPalsu implements ApiPusat {
   @override
   Future<void> aturBarangToko({required String cabangId, required String barangId, required bool dijual}) async {}
 
+  final salinan = <({String ke, String? dari})>[];
+
+  @override
+  Future<HasilSalinBarang> salinDaftarBarang({required String keCabangId, String? dariCabangId}) async {
+    salinan.add((ke: keCabangId, dari: dariCabangId));
+    return _jawab(const HasilSalinBarang(ditambah: 120, sudahAda: 3, hargaDisalin: 118));
+  }
+
   @override
   Future<List<String>> ubahHarga({required String barangId, required int eceran, required List<TingkatGrosir> grosir, required String alasan}) async {
     hargaTerkirim.add((barangId: barangId, eceran: eceran, grosir: grosir, alasan: alasan));

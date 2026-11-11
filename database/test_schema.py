@@ -282,4 +282,19 @@ harus_ditolak(db, "transaksi hasil tukar tidak bisa dibatalkan",
 harus_ditolak(db, "satu transaksi tukar hanya untuk satu retur", RETUR,
               (uid(), t1, "x", 0, kasir, T0, cab_a, "RTR-A01-261101-0006", sh3, None, t2, 0))
 
+# Revisi G: order barang (migrasi 005)
+sup = db.execute("SELECT id FROM supplier LIMIT 1").fetchone()[0]
+o1 = uid()
+db.execute("INSERT INTO order_barang VALUES (?,?,?,?,?,?,?)", (o1, cab_a, "ORD-A01-261101-0001", sup, "", kasir, T0))
+db.execute("INSERT INTO order_barang_item VALUES (?,?,?,?,?,?,?,?)", (uid(), o1, gula, "Gula Pasir 1 kg", "pak", 20, 3, 1))
+cek("kasir menyimpan order barang", db.execute("SELECT COUNT(*) FROM order_barang_item WHERE order_id = ?", (o1,)).fetchone()[0] == 1)
+harus_ditolak(db, "nomor order dobel di cabang yang sama ditolak", "INSERT INTO order_barang VALUES (?,?,?,?,?,?,?)",
+              (uid(), cab_a, "ORD-A01-261101-0001", sup, "", kasir, T0))
+harus_ditolak(db, "barang yang sama dua kali di satu order ditolak", "INSERT INTO order_barang_item VALUES (?,?,?,?,?,?,?,?)",
+              (uid(), o1, gula, "Gula Pasir 1 kg", "pak", 5, 3, 2))
+harus_ditolak(db, "jumlah order 0 ditolak", "INSERT INTO order_barang_item VALUES (?,?,?,?,?,?,?,?)",
+              (uid(), o1, gula, "Gula", "pak", 0, 3, 3))
+harus_ditolak(db, "order tidak bisa diubah", "UPDATE order_barang SET catatan = 'x' WHERE id = ?", (o1,))
+harus_ditolak(db, "item order tidak bisa dihapus", "DELETE FROM order_barang_item WHERE order_id = ?", (o1,))
+
 print(f"\nSemua {lulus} pengujian lulus.")

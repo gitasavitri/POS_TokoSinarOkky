@@ -20,6 +20,7 @@ enum MenuAdmin {
   ubahHarga('Ubah harga', Icons.sell, GrupAdmin.barang, Warna.coklat, Warna.coklatMuda),
   koreksi('Koreksi barang masuk', Icons.fact_check, GrupAdmin.barang, Warna.ungu, Warna.unguMuda),
   produk('Produk & stok', Icons.inventory_2, GrupAdmin.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
+  order('Order barang', Icons.shopping_cart, GrupAdmin.barang, Warna.oranyeTua, Warna.oranyeMuda),
   laporan('Laporan penjualan', Icons.bar_chart, GrupAdmin.laporan, Warna.utama, Color(0xFFDCEBFC)),
   log('Log aktivitas', Icons.history, GrupAdmin.laporan, Warna.abuIkon, Warna.abuIkonMuda),
   karyawan('Karyawan', Icons.badge, GrupAdmin.laporan, Warna.toska, Warna.toskaMuda),
@@ -66,7 +67,7 @@ enum MenuKasir {
 
   /// Menu yang dibuka sebagai halaman (bukan dialog / pesan).
   bool get halaman => switch (this) {
-        MenuKasir.mintaKoreksi || MenuKasir.orderBarang || MenuKasir.tutupShift => false,
+        MenuKasir.mintaKoreksi || MenuKasir.tutupShift => false,
         _ => true,
       };
 }

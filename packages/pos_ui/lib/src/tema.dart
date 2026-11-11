@@ -45,6 +45,9 @@ abstract final class Warna {
   static const oranye = Color(0xFF8A4500);
   static const oranyeTua = Color(0xFF7A4300);
   static const oranyeTegas = Color(0xFFE39A16);
+
+  /// Pita "MODE LATIHAN" di Aplikasi Toko (oranye tua, teks putih kontras ≥ 4.5:1).
+  static const pitaLatihan = Color(0xFFC2410C);
   static const ambarTombol = Color(0xFFFFE7B0);
   static const lencanaOranye = Color(0xFFD9480F);
 

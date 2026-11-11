@@ -285,7 +285,7 @@ class _PanelReturState extends State<PanelRetur> {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(flex: 3, child: _panelPilih(s)),
           const SizedBox(width: 16),
-          SizedBox(width: 380, height: widget.tinggiPratinjau, child: PratinjauStruk(baris: susunStruk(_dataStruk!))),
+          SizedBox(width: 380, height: widget.tinggiPratinjau, child: PratinjauStruk(baris: context.app.pratinjauStruk(susunStruk(_dataStruk!)))),
         ]),
     ]);
   }

@@ -136,6 +136,13 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
         if (admin) const SizedBox(height: 20),
         if (admin) const _KategoriSupplier(),
         if (admin) const SizedBox(height: 20),
+        if (app.latihan)
+          const KotakPesan(
+            'Mode latihan: data latihan tidak dikirim ke kantor pusat dan tidak dicadangkan. '
+            'Pengaturan kantor pusat & cadangan hanya bisa diubah di data asli.',
+            jenis: JenisPesan.perhatian,
+          )
+        else ...[
         _KantorPusat(bolehAtur: admin),
         const SizedBox(height: 20),
         Panel(
@@ -175,6 +182,7 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
             ),
           ]),
         ),
+        ],
       ],
     ]);
   }

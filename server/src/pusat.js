@@ -144,6 +144,95 @@ export async function aturBarangCabang(kon, { cabang_id, barang_id, aktif = 1, s
 }
 
 /**
+ * Salin daftar barang (rak) dari toko lain ke toko tujuan (revisi I), supaya toko baru bisa langsung order.
+ * - dari_cabang_id kosong/null = semua barang aktif.
+ * - Stok TIDAK ikut. Stok minimum ikut dari toko asal (hanya untuk barang yang belum ada di toko tujuan).
+ * - Barang yang sudah dijual di toko tujuan dilewati; yang pernah dinonaktifkan di toko tujuan diaktifkan lagi.
+ * - Harga: kalau barang belum punya harga yang berlaku di toko tujuan (tidak ada harga semua toko maupun harga
+ *   khusus toko tujuan), harga + grosir terbaru dari toko asal disalin sebagai harga khusus toko tujuan.
+ * Semua perubahan tercatat di tabel `perubahan`, jadi otomatis terkirim ke PC toko tujuan saat sinkron.
+ */
+export async function salinDaftarBarang(kon, { ke_cabang_id, dari_cabang_id = null }, olehId) {
+  wajib(adalahUuid(ke_cabang_id), 'Pilih toko tujuan');
+  const dari = dari_cabang_id == null || dari_cabang_id === '' ? null : dari_cabang_id;
+  if (dari != null) {
+    wajib(adalahUuid(dari), 'Toko asal tidak valid');
+    wajib(dari !== ke_cabang_id, 'Toko asal dan tujuan tidak boleh sama');
+    wajib(await satu(kon, 'SELECT 1 AS ada FROM cabang WHERE id = ?', [dari]), 'Toko asal tidak ditemukan', 404);
+  }
+  wajib(await satu(kon, 'SELECT 1 AS ada FROM cabang WHERE id = ?', [ke_cabang_id]), 'Toko tujuan tidak ditemukan', 404);
+
+  const sumber = dari
+    ? await pilih(
+        kon,
+        'SELECT bc.barang_id, bc.stok_minimum FROM barang_cabang bc JOIN barang b ON b.id = bc.barang_id' +
+          ' WHERE bc.cabang_id = ? AND bc.aktif = 1 AND b.aktif = 1 ORDER BY b.nama',
+        [dari],
+      )
+    : await pilih(kon, 'SELECT id AS barang_id, 0 AS stok_minimum FROM barang WHERE aktif = 1 ORDER BY nama');
+
+  const t = isoUtc();
+  let ditambah = 0;
+  let sudahAda = 0;
+  let hargaDisalin = 0;
+  for (const s of sumber) {
+    const lama = await satu(kon, 'SELECT * FROM barang_cabang WHERE cabang_id = ? AND barang_id = ?', [ke_cabang_id, s.barang_id]);
+    if (lama?.aktif === 1) {
+      sudahAda++;
+      continue;
+    }
+    await simpanBaris(kon, null, 'barang_cabang', {
+      cabang_id: ke_cabang_id,
+      barang_id: s.barang_id,
+      aktif: 1,
+      stok_minimum: lama ? lama.stok_minimum : s.stok_minimum,
+      created_at: lama?.created_at ?? t,
+      updated_at: waktuSesudah(lama?.updated_at),
+    });
+    ditambah++;
+
+    if (!dari) continue;
+    const punyaHarga = await satu(
+      kon,
+      'SELECT 1 AS ada FROM harga_jual WHERE barang_id = ? AND (cabang_id IS NULL OR cabang_id = ?) AND berlaku_mulai <= ? LIMIT 1',
+      [s.barang_id, ke_cabang_id, t],
+    );
+    if (punyaHarga) continue;
+    const h = await satu(
+      kon,
+      'SELECT * FROM harga_jual WHERE barang_id = ? AND cabang_id = ? AND berlaku_mulai <= ? ORDER BY berlaku_mulai DESC, created_at DESC LIMIT 1',
+      [s.barang_id, dari, t],
+    );
+    if (!h) continue;
+    const hargaId = buatId();
+    await simpanBaris(kon, null, 'harga_jual', {
+      id: hargaId,
+      barang_id: s.barang_id,
+      cabang_id: ke_cabang_id,
+      harga: h.harga,
+      sumber: 'pusat',
+      ref_id: h.id,
+      alasan: 'Disalin dari toko lain (salin daftar barang)',
+      dibuat_oleh: olehId,
+      disetujui_oleh: null,
+      berlaku_mulai: t,
+      created_at: t,
+    });
+    for (const g of await pilih(kon, 'SELECT min_qty, harga FROM harga_grosir WHERE harga_jual_id = ? ORDER BY min_qty', [h.id])) {
+      await simpanBaris(kon, null, 'harga_grosir', { id: buatId(), harga_jual_id: hargaId, min_qty: g.min_qty, harga: g.harga, created_at: t });
+    }
+    hargaDisalin++;
+  }
+  await catatLog(kon, {
+    cabangId: ke_cabang_id,
+    penggunaId: olehId,
+    aksi: 'salin_daftar_barang',
+    detail: { dari_cabang_id: dari, ditambah, sudah_ada: sudahAda, harga_disalin: hargaDisalin },
+  });
+  return { ditambah, sudah_ada: sudahAda, harga_disalin: hargaDisalin };
+}
+
+/**
  * Harga baru dari pusat untuk SEMUA toko (cabang_id NULL). Menggantikan harga khusus toko yang lebih lama.
  * Mengembalikan peringatan (bukan galat) kalau harga eceran ≤ HPP tertinggi.
  */

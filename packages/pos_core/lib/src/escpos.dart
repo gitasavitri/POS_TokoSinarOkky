@@ -118,12 +118,16 @@ Uint8List cetakBaris(
 }
 
 /// Struk lengkap → byte printer.
-Uint8List cetakStruk(DataStruk d, {bool potongKertas = false}) =>
-    cetakBaris(susunStruk(d), barcode: isiBarcodeStruk(d.noTransaksi), potongKertas: potongKertas);
+///
+/// [latihan] = mode latihan: tulisan "LATIHAN - BUKAN STRUK ASLI" di atas & bawah, dan TANPA barcode
+/// (nomor transaksi latihan bisa sama dengan nomor transaksi asli, jadi struk latihan tidak boleh bisa di-scan untuk retur).
+Uint8List cetakStruk(DataStruk d, {bool potongKertas = false, bool latihan = false}) => latihan
+    ? cetakBaris(tandaiLatihan(susunStruk(d)), potongKertas: potongKertas)
+    : cetakBaris(susunStruk(d), barcode: isiBarcodeStruk(d.noTransaksi), potongKertas: potongKertas);
 
 /// Struk retur → byte printer (tanpa barcode).
-Uint8List cetakStrukRetur(DataStrukRetur d, {bool potongKertas = false}) =>
-    cetakBaris(susunStrukRetur(d), potongKertas: potongKertas);
+Uint8List cetakStrukRetur(DataStrukRetur d, {bool potongKertas = false, bool latihan = false}) =>
+    cetakBaris(latihan ? tandaiLatihan(susunStrukRetur(d)) : susunStrukRetur(d), potongKertas: potongKertas);
 
 /// Struk tes dari halaman Pengaturan printer.
 Uint8List cetakTes({required String namaToko, required String namaCabang, bool potongKertas = false}) {
