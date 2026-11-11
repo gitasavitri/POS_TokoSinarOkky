@@ -123,6 +123,8 @@ class RingkasanShift {
     required this.penjualanTunai,
     required this.penjualanNonTunai,
     required this.returTunai,
+    this.kasMasuk = 0,
+    this.kasKeluar = 0,
   });
 
   final Shift shift;
@@ -130,9 +132,58 @@ class RingkasanShift {
   final int penjualanTunai;
   final int penjualanNonTunai;
   final int returTunai;
+  final int kasMasuk;
+  final int kasKeluar;
 
-  /// Uang tunai yang seharusnya ada.
-  int get kasSistem => shift.modalAwal + penjualanTunai - returTunai;
+  /// Total penjualan (tunai + non-tunai). Boleh dilihat kasir.
+  int get penjualan => penjualanTunai + penjualanNonTunai;
+
+  /// Uang tunai yang seharusnya ada. JANGAN ditampilkan ke kasir sebelum ia menghitung (hitung buta).
+  int get kasSistem => hitungKasSeharusnya(
+        modalAwal: shift.modalAwal,
+        penjualanTunai: penjualanTunai,
+        returTunai: returTunai,
+        kasMasuk: kasMasuk,
+        kasKeluar: kasKeluar,
+      );
+}
+
+/// Kas keluar/masuk selama shift.
+class KasShift {
+  const KasShift({
+    required this.id,
+    required this.jenis,
+    required this.jumlah,
+    required this.keterangan,
+    required this.namaPembuat,
+    required this.namaPenyetuju,
+    required this.waktu,
+  });
+  final String id;
+  final JenisKas jenis;
+  final int jumlah;
+  final String keterangan;
+  final String namaPembuat;
+  final String? namaPenyetuju;
+  final DateTime waktu;
+}
+
+/// Satu hitungan uang saat tutup shift.
+class HitunganShift {
+  const HitunganShift({
+    required this.ke,
+    required this.kasDihitung,
+    required this.kasSistem,
+    required this.selisih,
+    required this.disetujuiOleh,
+    required this.waktu,
+  });
+  final int ke;
+  final int kasDihitung;
+  final int kasSistem;
+  final int selisih;
+  final String? disetujuiOleh;
+  final DateTime waktu;
 }
 
 /// Ringkasan transaksi untuk daftar/laporan.

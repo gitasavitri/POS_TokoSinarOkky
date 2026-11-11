@@ -9,6 +9,7 @@ export 'src/keamanan.dart';
 export 'src/keranjang.dart';
 export 'src/klien_server.dart';
 export 'src/pembayaran.dart';
+export 'src/shift.dart';
 export 'src/struk.dart';
 export 'src/uang.dart';
 export 'src/waktu.dart';

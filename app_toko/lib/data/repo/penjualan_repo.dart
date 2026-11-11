@@ -84,18 +84,153 @@ class PenjualanRepo {
       ' WHERE t.cabang_id = ? AND r.created_at >= ? AND r.created_at <= ?',
       [cabangId, isoUtc(s.dibukaPada), ditutup ?? '9999'],
     )!;
+    final kas = _db.satu(
+      "SELECT IFNULL(SUM(CASE WHEN jenis = 'masuk' THEN jumlah ELSE 0 END), 0) AS masuk,"
+      " IFNULL(SUM(CASE WHEN jenis = 'keluar' THEN jumlah ELSE 0 END), 0) AS keluar"
+      ' FROM kas_shift WHERE shift_id = ?',
+      [shiftId],
+    )!;
     return RingkasanShift(
       shift: s,
       jumlahTransaksi: r['n']! as int,
       penjualanTunai: r['tunai']! as int,
       penjualanNonTunai: r['non_tunai']! as int,
       returTunai: retur['n']! as int,
+      kasMasuk: kas['masuk']! as int,
+      kasKeluar: kas['keluar']! as int,
     );
   }
 
-  /// Tutup shift: kasir menghitung uang tunai, sistem mencatat selisihnya.
-  RingkasanShift tutupShift({required String shiftId, required int kasDihitung, required String olehId}) {
+  bool _shiftDitutup(String shiftId) => _db.satu('SELECT 1 FROM shift_tutup WHERE shift_id = ?', [shiftId]) != null;
+
+  // ---------------------------------------------------------------- kas keluar / masuk
+
+  List<KasShift> daftarKas(String shiftId) => _db
+      .pilih(
+        'SELECT k.*, p.nama AS pembuat, s.nama AS penyetuju FROM kas_shift k'
+        ' JOIN pengguna p ON p.id = k.dibuat_oleh LEFT JOIN pengguna s ON s.id = k.disetujui_oleh'
+        ' WHERE k.shift_id = ? ORDER BY k.created_at, k.rowid',
+        [shiftId],
+      )
+      .map((r) => KasShift(
+            id: r['id'] as String,
+            jenis: JenisKas.dariKode(r['jenis'] as String),
+            jumlah: r['jumlah'] as int,
+            keterangan: r['keterangan'] as String,
+            namaPembuat: r['pembuat'] as String,
+            namaPenyetuju: r['penyetuju'] as String?,
+            waktu: DateTime.parse(r['created_at'] as String),
+          ))
+      .toList();
+
+  /// Catat kas keluar/masuk di shift [shiftId]. Kasir dengan jumlah ≥ [batasKasTanpaPin] wajib [disetujuiOleh] (SPV/Admin).
+  String catatKas({
+    required String shiftId,
+    required JenisKas jenis,
+    required int jumlah,
+    required String keterangan,
+    required Pengguna oleh,
+    Pengguna? disetujuiOleh,
+  }) {
+    final galat = cekKas(jumlah: jumlah, keterangan: keterangan);
+    if (galat != null) throw ArgumentError(galat);
+    if (aksesKas(oleh.peran, jumlah) == Akses.pinSpv && (disetujuiOleh == null || !bolehMenyetujui(disetujuiOleh.peran))) {
+      throw StateError('${jenis.label} mulai ${formatRupiah(batasKasTanpaPin)} perlu PIN SPV.');
+    }
+    final shift = _db.satu('SELECT cabang_id FROM shift WHERE id = ?', [shiftId]);
+    if (shift == null) throw ArgumentError('Shift tidak ditemukan');
+    if (_shiftDitutup(shiftId)) throw StateError('Shift sudah ditutup');
+    final cabangId = shift['cabang_id'] as String;
+    final id = buatId();
+    _db.transaksi(() {
+      _db.jalankan(
+        'INSERT INTO kas_shift (id, cabang_id, shift_id, jenis, jumlah, keterangan, dibuat_oleh, disetujui_oleh, created_at)'
+        ' VALUES (?,?,?,?,?,?,?,?,?)',
+        [id, cabangId, shiftId, jenis.kode, jumlah, keterangan.trim(), oleh.id, disetujuiOleh?.id, _db.sekarangIso()],
+      );
+      _db.outbox('kas_shift', id);
+      _db.log(
+        cabangId: cabangId,
+        penggunaId: oleh.id,
+        disetujuiOleh: disetujuiOleh?.id,
+        aksi: 'kas_${jenis.kode}',
+        detail: {'shift_id': shiftId, 'jumlah': jumlah, 'keterangan': keterangan.trim()},
+      );
+    });
+    return id;
+  }
+
+  // ---------------------------------------------------------------- tutup shift (hitung buta)
+
+  List<HitunganShift> hitunganShift(String shiftId) => _db
+      .pilih('SELECT * FROM shift_hitung WHERE shift_id = ? ORDER BY ke', [shiftId])
+      .map((r) => HitunganShift(
+            ke: r['ke'] as int,
+            kasDihitung: r['kas_dihitung'] as int,
+            kasSistem: r['kas_sistem'] as int,
+            selisih: r['selisih'] as int,
+            disetujuiOleh: r['disetujui_oleh'] as String?,
+            waktu: DateTime.parse(r['created_at'] as String),
+          ))
+      .toList();
+
+  /// Jumlah hitungan yang masih berlaku: dibuat setelah transaksi/kas terakhir (uang seharusnya belum berubah).
+  /// Kalau sesudah menghitung kasir membatalkan tutup shift lalu berjualan lagi, hitungan lama tidak berlaku
+  /// dan tidak menghabiskan jatah hitung ulang.
+  int hitunganBerlaku(String shiftId, {List<HitunganShift>? semua, RingkasanShift? ring}) {
+    final kas = (ring ?? ringkasanShift(shiftId)).kasSistem;
+    final daftar = semua ?? hitunganShift(shiftId);
+    var n = 0;
+    for (final h in daftar.reversed) {
+      if (h.kasSistem != kas) break;
+      n++;
+    }
+    return n;
+  }
+
+  /// Simpan hitungan uang kasir (hitung buta). Semua hitungan tercatat. Kasir boleh hitung ulang
+  /// [maksHitungUlangKasir] kali; sesudahnya wajib [disetujuiOleh] (SPV/Admin).
+  HitunganShift simpanHitungan({required String shiftId, required int kasDihitung, required Pengguna oleh, Pengguna? disetujuiOleh}) {
+    if (kasDihitung < 0) throw ArgumentError('Jumlah uang tidak boleh minus');
+    if (_shiftDitutup(shiftId)) throw StateError('Shift sudah ditutup');
     final ring = ringkasanShift(shiftId);
+    final semua = hitunganShift(shiftId);
+    final sebelumnya = semua.length;
+    if (aksesHitungUang(oleh.peran, hitunganBerlaku(shiftId, semua: semua, ring: ring)) == Akses.pinSpv &&
+        (disetujuiOleh == null || !bolehMenyetujui(disetujuiOleh.peran))) {
+      throw StateError('Sudah dihitung ulang $maksHitungUlangKasir kali. Hitung ulang berikutnya perlu PIN SPV.');
+    }
+    final cabangId = _db.satu('SELECT cabang_id FROM shift WHERE id = ?', [shiftId])!['cabang_id'] as String;
+    final ke = sebelumnya + 1;
+    final selisih = kasDihitung - ring.kasSistem;
+    final id = buatId();
+    _db.transaksi(() {
+      _db.jalankan(
+        'INSERT INTO shift_hitung (id, cabang_id, shift_id, ke, kas_dihitung, kas_sistem, selisih, dihitung_oleh, disetujui_oleh, created_at)'
+        ' VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [id, cabangId, shiftId, ke, kasDihitung, ring.kasSistem, selisih, oleh.id, disetujuiOleh?.id, _db.sekarangIso()],
+      );
+      _db.outbox('shift_hitung', id);
+      _db.log(
+        cabangId: cabangId,
+        penggunaId: oleh.id,
+        disetujuiOleh: disetujuiOleh?.id,
+        aksi: ke == 1 ? 'hitung_uang_shift' : 'hitung_ulang_shift',
+        detail: {'shift_id': shiftId, 'ke': ke, 'kas_dihitung': kasDihitung, 'kas_sistem': ring.kasSistem, 'selisih': selisih},
+      );
+    });
+    return hitunganShift(shiftId).last;
+  }
+
+  /// Tutup shift memakai hitungan uang terakhir (lihat [simpanHitungan]). Wajib sudah dihitung minimal sekali.
+  RingkasanShift tutupShift({required String shiftId, required String olehId}) {
+    final hitungan = hitunganShift(shiftId);
+    if (hitungan.isEmpty) throw StateError('Hitung uang tunai dulu sebelum menutup shift');
+    final kasDihitung = hitungan.last.kasDihitung;
+    final ring = ringkasanShift(shiftId);
+    if (hitungan.last.kasSistem != ring.kasSistem) {
+      throw StateError('Ada transaksi atau kas keluar/masuk baru setelah uang dihitung. Hitung ulang dulu.');
+    }
     final selisih = kasDihitung - ring.kasSistem;
     final cabangId = _db.satu('SELECT cabang_id FROM shift WHERE id = ?', [shiftId])!['cabang_id'] as String;
     _db.transaksi(() {
@@ -109,6 +244,7 @@ class PenjualanRepo {
         'kas_dihitung': kasDihitung,
         'kas_sistem': ring.kasSistem,
         'selisih': selisih,
+        'jumlah_hitungan': hitungan.length,
       });
     });
     return ring;

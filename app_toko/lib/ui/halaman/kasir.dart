@@ -462,6 +462,13 @@ class _HalamanKasirState extends State<HalamanKasir> {
     }
   }
 
+  /// Kas keluar/masuk (bayar titipan, beli dari sales, tambah uang kecil, ...).
+  Future<void> _kas() async {
+    if (app.shiftAktif == null) return _pastikanShift();
+    await kasDialog(context);
+    _fokuskan();
+  }
+
   Future<void> _bukaPengaturan() async {
     if (widget.onBukaPengaturan == null) return;
     if (app.akses(Izin.aturPrinter) != Akses.ya) {
@@ -650,6 +657,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.f2): () => _cari(),
+        const SingleActivator(LogicalKeyboardKey.f6): _kas,
         const SingleActivator(LogicalKeyboardKey.f8): _tahan,
         const SingleActivator(LogicalKeyboardKey.f9): _transaksiTerakhir,
         const SingleActivator(LogicalKeyboardKey.f12): _bayar,
@@ -870,12 +878,12 @@ class _HalamanKasirState extends State<HalamanKasir> {
                   _Pintasan('F2', 'Cari'),
                   _Pintasan('↓ ↑', 'Pindah kolom'),
                   _Pintasan('Enter 2×', 'Bayar'),
-                  _Pintasan('F9', 'Terakhir'),
                   _Pintasan('Del', 'Hapus baris'),
                 ]),
               ),
               _TombolKecil('Ditahan (${_ditahan.length})', _ditahan.isEmpty ? null : _ambilDitahan),
-              _TombolKecil('Transaksi terakhir', _transaksiTerakhir),
+              _TombolKecil('Terakhir (F9)', _transaksiTerakhir),
+              _TombolKecil('Kas keluar/masuk (F6)', _kas),
               if (widget.onBukaUbahHarga != null) _TombolKecil('Ubah harga', widget.onBukaUbahHarga),
               if (widget.onBukaBarangMasuk != null) _TombolKecil('Barang masuk', widget.onBukaBarangMasuk),
               if (widget.onBukaPengaturan != null) _TombolKecil('Pengaturan', _bukaPengaturan),

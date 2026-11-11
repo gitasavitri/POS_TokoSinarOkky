@@ -92,6 +92,38 @@ describe('Server Pusat', { skip: lewati }, () => {
     assert.equal(p.totp_secret, null, 'rahasia TOTP admin toko tidak disimpan di server');
   });
 
+  test('kas keluar/masuk dan hitungan tutup shift ikut terkirim; toko B tidak bisa menulisnya untuk toko A', async () => {
+    // Hanya shift-nya (tanpa transaksi) supaya laporan & stok di test lain tidak berubah.
+    const jual = penjualanContoh(A, { no: 2, waktu: '2026-10-01T04:00:00Z' });
+    const kas = {
+      id: crypto.randomUUID(), cabang_id: A.cabang.id, shift_id: jual.shift.id, jenis: 'keluar', jumlah: 120000,
+      keterangan: 'Bayar titipan kue', dibuat_oleh: A.kasir.id, disetujui_oleh: A.admin.id, created_at: '2026-10-01T04:10:00Z',
+    };
+    const hitung = {
+      id: crypto.randomUUID(), cabang_id: A.cabang.id, shift_id: jual.shift.id, ke: 1, kas_dihitung: 300000, kas_sistem: 335000,
+      selisih: -35000, dihitung_oleh: A.kasir.id, disetujui_oleh: null, created_at: '2026-10-01T05:00:00Z',
+    };
+    const r = await minta('POST', '/api/sinkron/kirim', {
+      token: perangkat.A.token,
+      isi: { item: [item('shift', jual.shift), item('kas_shift', kas), item('shift_hitung', hitung)] },
+    });
+    assert.deepEqual(r.isi.ditolak, []);
+    const [[k]] = await db.pool.query('SELECT jumlah, disetujui_oleh FROM kas_shift WHERE id = ?', [kas.id]);
+    assert.equal(Number(k.jumlah), 120000);
+    assert.equal(k.disetujui_oleh, A.admin.id);
+    const [[h]] = await db.pool.query('SELECT selisih FROM shift_hitung WHERE id = ?', [hitung.id]);
+    assert.equal(Number(h.selisih), -35000);
+    await assert.rejects(db.pool.query('UPDATE kas_shift SET jumlah = 1'), /tidak boleh diubah/);
+    await assert.rejects(db.pool.query('DELETE FROM shift_hitung'), /tidak boleh dihapus/);
+
+    const palsu = await minta('POST', '/api/sinkron/kirim', {
+      token: perangkat.B.token,
+      isi: { item: [item('kas_shift', { ...kas, id: crypto.randomUUID() })] },
+    });
+    assert.equal(palsu.isi.diterima.length, 0);
+    assert.match(palsu.isi.ditolak[0].alasan, /bukan milik cabang/);
+  });
+
   test('toko B tidak bisa menulis data toko A, dan tidak bisa membuat harga untuk semua toko', async () => {
     await minta('POST', '/api/sinkron/kirim', { token: perangkat.B.token, isi: { item: itemSetup(B) } });
     const palsu = { ...penjualanContoh(A, { no: 99 }) };

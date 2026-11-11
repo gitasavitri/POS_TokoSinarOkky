@@ -8,6 +8,8 @@ import uuid
 from pathlib import Path
 
 SCHEMA = Path(__file__).with_name("schema_toko.sql").read_text(encoding="utf-8")
+# Migrasi lanjutan (002, 003, ...) dijalankan berurutan setelah skema awal, sama seperti di Aplikasi Toko.
+MIGRASI = [f.read_text(encoding="utf-8") for f in sorted((Path(__file__).parent / "migrasi").glob("[0-9][0-9][0-9]_*.sql"))]
 T0 = "2026-11-01T01:00:00Z"
 lulus = 0
 
@@ -54,6 +56,8 @@ def harga_untuk_qty(db, harga_jual_id, eceran, qty):
 
 db = sqlite3.connect(":memory:")
 db.executescript(SCHEMA)
+for m in MIGRASI:
+    db.executescript(m)
 print(f"SQLite {sqlite3.sqlite_version}: skema dibuat")
 
 # --- master data ---------------------------------------------------------
@@ -190,5 +194,29 @@ harus_ditolak(db, "selisih kas harus = dihitung - sistem",
               "INSERT INTO shift_tutup VALUES (?,?,?,?,?,?)", (sh, 495000, 500000, 0, kasir, T0))
 db.execute("INSERT INTO log_aktivitas VALUES (?,?,?,?,?,?,?)", (uid(), cab_a, kasir, spv, "batal_transaksi", "{}", T0))
 harus_ditolak(db, "log tidak bisa dihapus", "DELETE FROM log_aktivitas")
+
+# --- kas keluar/masuk & hitung buta (migrasi 002) -----------------------
+kk = uid()
+db.execute("INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (kk, cab_a, sh, "keluar", 20000, "Beli galon", kasir, None, T0))
+harus_ditolak(db, "kas keluar jumlah 0 ditolak",
+              "INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, "keluar", 0, "x", kasir, None, T0))
+harus_ditolak(db, "kas keluar tanpa keterangan ditolak",
+              "INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, "keluar", 5000, "", kasir, None, T0))
+harus_ditolak(db, "jenis kas selain keluar/masuk ditolak",
+              "INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, "pinjam", 5000, "x", kasir, None, T0))
+harus_ditolak(db, "kas_shift tidak bisa diubah", "UPDATE kas_shift SET jumlah = 1 WHERE id = ?", (kk,))
+harus_ditolak(db, "kas_shift tidak bisa dihapus", "DELETE FROM kas_shift")
+db.execute("INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 1, 480000, 500000, -20000, kasir, None, T0))
+db.execute("INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 2, 500000, 500000, 0, kasir, None, T0))
+harus_ditolak(db, "hitungan ke-2 dobel ditolak",
+              "INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 2, 1, 500000, -499999, kasir, None, T0))
+harus_ditolak(db, "selisih hitungan harus = dihitung - sistem",
+              "INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 3, 1, 500000, 0, kasir, None, T0))
+harus_ditolak(db, "hitungan tidak bisa diubah", "UPDATE shift_hitung SET kas_dihitung = 500000")
+db.execute("INSERT INTO shift_tutup VALUES (?,?,?,?,?,?)", (sh, 500000, 500000, 0, kasir, T0))
+harus_ditolak(db, "kas keluar setelah shift ditutup ditolak",
+              "INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, "masuk", 5000, "Tambah uang kecil", kasir, None, T0))
+harus_ditolak(db, "hitungan setelah shift ditutup ditolak",
+              "INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 3, 1, 1, 0, kasir, None, T0))
 
 print(f"\nSemua {lulus} pengujian lulus.")

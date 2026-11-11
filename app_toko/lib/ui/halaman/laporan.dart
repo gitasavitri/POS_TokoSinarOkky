@@ -176,6 +176,10 @@ const _namaAksi = {
   'keluar_otomatis': 'Keluar otomatis',
   'buka_shift': 'Buka shift',
   'tutup_shift': 'Tutup shift',
+  'hitung_uang_shift': 'Hitung uang tutup shift',
+  'hitung_ulang_shift': 'Hitung ulang uang shift',
+  'kas_keluar': 'Kas keluar',
+  'kas_masuk': 'Kas masuk',
   'batal_transaksi': 'Membatalkan transaksi',
   'retur': 'Retur',
   'kirim_barang_masuk': 'Kirim barang masuk',
@@ -197,7 +201,10 @@ const _namaAksi = {
   'atur_stok_minimum': 'Atur stok minimum',
 };
 
-const _aksiPenting = {'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'koreksi_disetujui', 'stok_opname', 'retur'};
+const _aksiPenting = {
+  'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'koreksi_disetujui', 'stok_opname', 'retur',
+  'hitung_ulang_shift', 'kas_keluar',
+};
 
 String ringkasDetail(String aksi, Map<String, Object?> d) {
   int? n(String k) => d[k] is int ? d[k] as int : null;
@@ -210,6 +217,12 @@ String ringkasDetail(String aksi, Map<String, Object?> d) {
       return 'kas ${formatAngka(n('kas_dihitung') ?? 0)}, seharusnya ${formatAngka(n('kas_sistem') ?? 0)}, selisih ${formatAngka(n('selisih') ?? 0)}';
     case 'buka_shift':
       return 'modal ${formatAngka(n('modal_awal') ?? 0)}';
+    case 'hitung_uang_shift':
+    case 'hitung_ulang_shift':
+      return 'hitungan ke-${n('ke')}: ${formatAngka(n('kas_dihitung') ?? 0)}, selisih ${formatAngka(n('selisih') ?? 0)}';
+    case 'kas_keluar':
+    case 'kas_masuk':
+      return '${formatRupiah(n('jumlah') ?? 0)} · ${d['keterangan']}';
     case 'kirim_barang_masuk':
       return 'faktur ${d['no_faktur']} · ${d['jumlah_jenis']} jenis, ${d['jumlah_barang']} barang';
     case 'retur':

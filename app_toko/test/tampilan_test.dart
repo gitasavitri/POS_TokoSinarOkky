@@ -15,6 +15,7 @@ import 'package:app_toko/layanan/aplikasi.dart';
 import 'package:app_toko/layanan/printer.dart';
 import 'package:app_toko/ui/akar.dart';
 import 'package:app_toko/ui/halaman/kasir.dart';
+import 'package:app_toko/ui/halaman/shift.dart';
 import 'package:app_toko/ui/komponen/kerangka.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -255,6 +256,70 @@ void main() {
     expect(find.text('UANG PAS'), findsOneWidget);
     expect(find.text(formatRupiah(0)), findsWidgets);
     await _foto(t, '13-kasir-uang-pas');
+    s.app.keluar();
+  });
+
+  testWidgets('kasir: kas keluar (F6), di bawah Rp100.000 tanpa PIN', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.sendKeyEvent(LogicalKeyboardKey.f6);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(DialogKas), findsOneWidget);
+    await t.enterText(find.descendant(of: find.byKey(const ValueKey('jumlah-kas')), matching: find.byType(EditableText)), '150000');
+    await t.pump();
+    expect(find.text('Simpan (PIN SPV)'), findsOneWidget, reason: 'Rp150.000 perlu PIN SPV');
+    await t.enterText(find.descendant(of: find.byKey(const ValueKey('jumlah-kas')), matching: find.byType(EditableText)), '25000');
+    await t.tap(find.text('Beli barang dari sales'));
+    await t.pump();
+    await _foto(t, '14-kasir-kas-keluar');
+    await t.tap(find.byKey(const ValueKey('simpan-kas')));
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(DialogKas), findsNothing);
+    final kas = s.app.penjualan.daftarKas(s.app.shiftAktif!.id);
+    expect(kas.single.jumlah, 25000);
+    expect(kas.single.keterangan, 'Beli barang dari sales');
+    s.app.keluar();
+  });
+
+  testWidgets('kasir: tutup shift hitung buta', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.tap(find.text('Tutup shift'));
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(DialogTutupShift), findsOneWidget);
+    // Uang seharusnya: modal 200.000 + tunai 212.000 = 412.000. Tidak boleh tampil sebelum dihitung.
+    final kasSistem = s.app.penjualan.ringkasanShift(s.app.shiftAktif!.id).kasSistem;
+    expect(kasSistem, 412000);
+    final seharusnya = formatRupiah(kasSistem);
+    expect(find.textContaining(seharusnya), findsNothing, reason: 'hitung buta');
+    expect(find.textContaining('seharusnya'), findsNothing);
+    await _foto(t, '15-kasir-tutup-shift-hitung');
+
+    Future<void> hitung(String uang) async {
+      await t.enterText(find.descendant(of: find.byKey(const ValueKey('uang-dihitung')), matching: find.byType(EditableText)), uang);
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('simpan-hitungan')));
+      await t.pump(const Duration(milliseconds: 300));
+    }
+
+    await hitung('392000');
+    expect(find.textContaining('Uang KURANG ${formatRupiah(20000)}'), findsOneWidget);
+    expect(find.text('Hitung ulang (sisa 2)'), findsOneWidget);
+    await _foto(t, '16-kasir-tutup-shift-selisih');
+    await t.tap(find.byKey(const ValueKey('hitung-ulang')));
+    await t.pump();
+    await hitung('404000');
+    await t.tap(find.byKey(const ValueKey('hitung-ulang')));
+    await t.pump();
+    await hitung('409000');
+    expect(find.text('Hitung ulang (PIN SPV)'), findsOneWidget);
+    expect(find.text('Hitungan 1'), findsOneWidget);
+    expect(s.app.penjualan.hitunganShift(s.app.shiftAktif!.id).length, 3);
     s.app.keluar();
   });
 

@@ -45,7 +45,8 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 4. **Setiap tabel data toko punya `cabang_id`.**
 5. **Data transaksi dan riwayat hanya boleh ditambah, tidak boleh diubah atau dihapus.**
    Ini dijaga trigger di database. Tabelnya: `transaksi`, `transaksi_item`, `pembayaran`, `pembatalan`,
-   `retur`, `retur_item`, `mutasi_stok`, `harga_jual`, `harga_grosir`, `hpp_barang`, `shift_tutup`, `log_aktivitas`.
+   `retur`, `retur_item`, `mutasi_stok`, `harga_jual`, `harga_grosir`, `hpp_barang`, `shift_tutup`, `log_aktivitas`,
+   `kas_shift`, `shift_hitung` (migrasi 002).
    Koreksi = baris baru, bukan mengubah baris lama.
 6. **Stok tidak disimpan sebagai angka yang di-update.** Stok = jumlah semua baris `mutasi_stok` (lihat view `stok_sekarang`).
 7. **Waktu disimpan sebagai teks ISO 8601 UTC**, misalnya `2026-11-05T06:09:00Z`. Tampilkan ke pengguna dalam WIB.

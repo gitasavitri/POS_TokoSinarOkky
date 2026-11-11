@@ -11,9 +11,11 @@ import 'package:app_toko/data/repo/pengaturan_repo.dart';
 import 'package:app_toko/data/repo/pengguna_repo.dart';
 import 'package:app_toko/data/repo/penjualan_repo.dart';
 import 'package:app_toko/data/repo/setup_repo.dart';
+import 'package:app_toko/data/skema_migrasi.dart';
 import 'package:app_toko/data/skema_v1.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_core/pos_core.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 /// Jam palsu yang bisa dimajukan, supaya urutan waktu di test pasti.
 class JamUji {
@@ -82,9 +84,32 @@ void main() {
   setUp(siapkan);
   tearDown(() => db.tutup());
 
-  test('skema di aplikasi sama dengan database/schema_toko.sql', () {
+  test('skema di aplikasi sama dengan database/schema_toko.sql + database/migrasi', () {
     expect(skemaV1, File('../database/schema_toko.sql').readAsStringSync());
-    expect(db.versiSkema, 1);
+    final file = Directory('../database/migrasi').listSync().whereType<File>().where((f) => f.path.endsWith('.sql')).toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    expect(skemaMigrasi, [for (final f in file) f.readAsStringSync()], reason: 'jalankan: dart run tool/salin_skema.dart');
+    expect(db.versiSkema, 1 + skemaMigrasi.length);
+  });
+
+  test('database versi 1 lama naik ke versi terbaru tanpa kehilangan data', () {
+    final folder = Directory.systemTemp.createTempSync('pos_migrasi');
+    final path = '${folder.path}/lama.db';
+    final lama = DatabaseToko.buka(path);
+    lama.tutup();
+    // Buat ulang sebagai versi 1 murni (seperti PC toko yang memakai versi aplikasi sebelumnya).
+    File(path).deleteSync();
+    final v1 = sqlite3.open(path)
+      ..execute(skemaV1)
+      ..execute('PRAGMA user_version = 1')
+      ..execute("INSERT INTO kategori VALUES ('k1','Sembako',1,'2026-11-01T00:00:00Z')");
+    v1.close();
+    final baru = DatabaseToko.buka(path);
+    expect(baru.versiSkema, 1 + skemaMigrasi.length);
+    expect(baru.satu('SELECT nama FROM kategori')!['nama'], 'Sembako');
+    expect(baru.satu("SELECT name FROM sqlite_master WHERE name = 'kas_shift'"), isNotNull);
+    baru.tutup();
+    folder.deleteSync(recursive: true);
   });
 
   group('setup & pengguna', () {
@@ -302,7 +327,9 @@ void main() {
       expect(ring.penjualanTunai, 35000);
       expect(ring.penjualanNonTunai, 170000);
       expect(ring.kasSistem, 500000 + 35000 - 17500);
-      final tutup = jual.tutupShift(shiftId: shift.id, kasDihitung: 517000, olehId: kasir.id);
+      expect(() => jual.tutupShift(shiftId: shift.id, olehId: kasir.id), throwsStateError, reason: 'wajib hitung dulu');
+      jual.simpanHitungan(shiftId: shift.id, kasDihitung: 517000, oleh: kasir);
+      final tutup = jual.tutupShift(shiftId: shift.id, olehId: kasir.id);
       expect(tutup.kasSistem, 517500);
       expect(db.satu('SELECT selisih FROM shift_tutup')!['selisih'], -500);
       expect(jual.shiftAktif(kasir.id), isNull);
@@ -321,6 +348,90 @@ void main() {
       expect(lap.terlaris(cabang.id, dari, sampai).single.qty, 12);
       expect(lap.perluDicek(cabang.id, dari, sampai).selisihKas, 1);
       expect(lap.csvTransaksi(lap.daftarTransaksi(cabang.id, dari, sampai)), contains('TRX-A01-261105-0002'));
+    });
+  });
+
+  group('kas keluar/masuk & hitung buta', () {
+    test('kas keluar/masuk mengubah uang seharusnya; kasir ≥ Rp100.000 wajib PIN SPV', () {
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 200000);
+      jual.catatKas(shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 20000, keterangan: 'Beli galon', oleh: kasir);
+      jam.maju();
+      jual.catatKas(shiftId: shift.id, jenis: JenisKas.masuk, jumlah: 50000, keterangan: 'Tambah uang kecil', oleh: kasir);
+      jam.maju();
+      expect(
+        () => jual.catatKas(shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 100000, keterangan: 'Bayar titipan kue', oleh: kasir),
+        throwsStateError,
+      );
+      expect(
+        () => jual.catatKas(
+            shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 100000, keterangan: 'Bayar titipan kue', oleh: kasir, disetujuiOleh: kasir),
+        throwsStateError,
+        reason: 'kasir tidak bisa menyetujui sendiri',
+      );
+      expect(() => jual.catatKas(shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 5000, keterangan: ' ', oleh: kasir), throwsArgumentError);
+      jual.catatKas(shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 100000, keterangan: 'Bayar titipan kue', oleh: kasir, disetujuiOleh: spv);
+
+      final ring = jual.ringkasanShift(shift.id);
+      expect(ring.kasMasuk, 50000);
+      expect(ring.kasKeluar, 120000);
+      expect(ring.kasSistem, 200000 + 50000 - 120000);
+      final daftar = jual.daftarKas(shift.id);
+      expect(daftar.map((k) => k.jumlah), [20000, 50000, 100000]);
+      expect(daftar.last.namaPenyetuju, 'Dewi');
+      expect(db.satu("SELECT COUNT(*) AS n FROM outbox WHERE tabel = 'kas_shift'")!['n'], 3);
+      expect(db.satu("SELECT disetujui_oleh FROM log_aktivitas WHERE aksi = 'kas_keluar' ORDER BY created_at DESC LIMIT 1")!['disetujui_oleh'],
+          spv.id);
+    });
+
+    test('hitung buta: hitungan + 2 hitung ulang tercatat, ke-4 butuh PIN SPV, tutup pakai hitungan terakhir', () {
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 200000);
+      final h1 = jual.simpanHitungan(shiftId: shift.id, kasDihitung: 180000, oleh: kasir);
+      expect(h1.ke, 1);
+      expect(h1.selisih, -20000);
+      jam.maju();
+      jual.simpanHitungan(shiftId: shift.id, kasDihitung: 190000, oleh: kasir);
+      jam.maju();
+      jual.simpanHitungan(shiftId: shift.id, kasDihitung: 195000, oleh: kasir);
+      jam.maju();
+      expect(() => jual.simpanHitungan(shiftId: shift.id, kasDihitung: 200000, oleh: kasir), throwsStateError);
+      final h4 = jual.simpanHitungan(shiftId: shift.id, kasDihitung: 200000, oleh: kasir, disetujuiOleh: spv);
+      expect(h4.ke, 4);
+      expect(h4.disetujuiOleh, spv.id);
+      expect(jual.hitunganShift(shift.id).map((h) => h.kasDihitung), [180000, 190000, 195000, 200000]);
+
+      jual.tutupShift(shiftId: shift.id, olehId: kasir.id);
+      expect(db.satu('SELECT kas_dihitung, selisih FROM shift_tutup')!['kas_dihitung'], 200000);
+      expect(() => jual.simpanHitungan(shiftId: shift.id, kasDihitung: 1, oleh: spv), throwsStateError);
+      expect(() => jual.catatKas(shiftId: shift.id, jenis: JenisKas.masuk, jumlah: 1000, keterangan: 'telat', oleh: spv), throwsStateError);
+      expect(db.satu("SELECT COUNT(*) AS n FROM outbox WHERE tabel = 'shift_hitung'")!['n'], 4);
+    });
+
+    test('hitungan lama tidak berlaku kalau ada transaksi baru sesudahnya', () {
+      final id = masukkanGula();
+      final gula = katalog.untukKasir(id, cabang.id)!;
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 100000);
+      for (var i = 0; i < 3; i++) {
+        jual.simpanHitungan(shiftId: shift.id, kasDihitung: 100000, oleh: kasir);
+        jam.maju();
+      }
+      // Batal tutup shift, lalu berjualan lagi.
+      jual.simpan(cabang: cabang, kasir: kasir, shift: shift, keranjang: Keranjang()..tambah(gula), metode: MetodeBayar.tunai, uangDiterima: 17500);
+      jam.maju();
+      expect(() => jual.tutupShift(shiftId: shift.id, olehId: kasir.id), throwsStateError, reason: 'hitungan sudah basi');
+      expect(jual.hitunganBerlaku(shift.id), 0);
+      final h = jual.simpanHitungan(shiftId: shift.id, kasDihitung: 117500, oleh: kasir); // tanpa PIN SPV
+      expect(h.ke, 4);
+      expect(h.selisih, 0);
+      jual.tutupShift(shiftId: shift.id, olehId: kasir.id);
+    });
+
+    test('SPV boleh hitung ulang tanpa batas', () {
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: spv.id, modalAwal: 0);
+      for (var i = 0; i < 5; i++) {
+        jual.simpanHitungan(shiftId: shift.id, kasDihitung: i, oleh: spv);
+        jam.maju();
+      }
+      expect(jual.hitunganShift(shift.id).length, 5);
     });
   });
 

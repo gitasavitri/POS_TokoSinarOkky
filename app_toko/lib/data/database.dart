@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:pos_core/pos_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'skema_migrasi.dart';
 import 'skema_v1.dart';
 
-/// Daftar migrasi. Index 0 = versi 1. Menambah migrasi = menambah elemen baru, jangan mengubah yang lama.
-const _migrasi = <String>[skemaV1];
+/// Daftar migrasi. Index 0 = versi 1. Menambah migrasi = menambah file database/migrasi/NNN_*.sql lalu
+/// menjalankan `dart run tool/salin_skema.dart`. Jangan mengubah migrasi yang sudah dipakai.
+const _migrasi = <String>[skemaV1, ...skemaMigrasi];
 
 /// Pembungkus database SQLite Aplikasi Toko.
 class DatabaseToko {
