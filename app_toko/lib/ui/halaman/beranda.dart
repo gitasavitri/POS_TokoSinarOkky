@@ -42,6 +42,8 @@ class MenuBeranda extends StatelessWidget {
         );
 
     final daftarCek = <Widget>[
+      if (cek.shiftMenunggu > 0)
+        itemCek('${cek.shiftMenunggu} shift menunggu dihitung', 'Amplop uang belum dihitung · isi hasilnya', penting: true, ke: MenuAdmin.shiftMenunggu),
       if (cek.batal > 0) itemCek('${cek.batal} transaksi dibatalkan', 'Lihat di Log aktivitas', penting: true, ke: MenuAdmin.log),
       if (cek.terkunci > 0 && MenuAdmin.karyawan.bolehUntuk(p.peran))
         itemCek('${cek.terkunci} akun terkunci', 'Salah PIN 5 kali · buka di Karyawan', penting: true, ke: MenuAdmin.karyawan),
@@ -67,6 +69,7 @@ class MenuBeranda extends StatelessWidget {
               ubin(m,
                   lencana: switch (m) {
                     MenuAdmin.koreksi when cek.koreksiMenunggu > 0 => '${cek.koreksiMenunggu}',
+                    MenuAdmin.shiftMenunggu when cek.shiftMenunggu > 0 => '${cek.shiftMenunggu}',
                     MenuAdmin.produk when menipis > 0 => '$menipis menipis',
                     MenuAdmin.ubahHarga when antreanLabel > 0 => '$antreanLabel label',
                     MenuAdmin.karyawan when cek.terkunci > 0 => '${cek.terkunci} terkunci',
@@ -118,6 +121,102 @@ class MenuBeranda extends StatelessWidget {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: daftarCek),
                   ),
                 ),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Menu ikon Kasir (revisi B): kotak "Shift aktif sejak…" + ikon menu per kelompok.
+/// Kembali ke menu atau keluar tidak menutup shift; shift hanya selesai lewat Tutup shift.
+class MenuBerandaKasir extends StatelessWidget {
+  const MenuBerandaKasir({super.key, required this.onMenu, required this.onBukaShift});
+  final ValueChanged<MenuKasir> onMenu;
+  final VoidCallback onBukaShift;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AplikasiScope.of(context, dengar: true);
+    final p = app.penggunaAktif!;
+    final c = app.cabang;
+    final shift = app.shiftAktif;
+    final ring = shift == null ? null : app.penjualan.ringkasanShift(shift.id);
+
+    List<Widget> grup(GrupKasir g) => [
+          for (final m in MenuKasir.values)
+            if (m != MenuKasir.beranda && m.grup == g)
+              UbinMenu(
+                ikon: m.ikon,
+                label: m.label,
+                warna: m.warna,
+                latar: m.latar,
+                utama: m == MenuKasir.transaksi,
+                lencana: m == MenuKasir.orderBarang ? 'segera' : null,
+                onTap: () => onMenu(m),
+              ),
+        ];
+
+    final kotakShift = Container(
+      key: const ValueKey('kotak-shift'),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: shift == null ? Warna.oranyeMuda : Warna.suksesMuda,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: shift == null ? Warna.oranyeGaris : const Color(0xFF8FD3AC), width: 1.5),
+        boxShadow: Warna.bayangan,
+      ),
+      child: Row(children: [
+        Icon(shift == null ? Icons.schedule : Icons.timer, size: 40, color: shift == null ? Warna.oranyeTua : Warna.suksesTua),
+        const SizedBox(width: 16),
+        Expanded(
+          child: shift == null
+              ? const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Belum buka shift', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Warna.oranyeTua)),
+                  Text('Buka shift dulu sebelum berjualan (hitung uang modal).', style: TextStyle(fontSize: 15.5, color: Warna.teks2)),
+                ])
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Shift aktif sejak ${formatLayar(shift.dibukaPada)}',
+                      style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Warna.suksesTua)),
+                  const Text('Shift tetap berjalan walau kembali ke menu atau keluar. Shift selesai hanya lewat Tutup shift.',
+                      style: TextStyle(fontSize: 15.5, color: Warna.teks2)),
+                ]),
+        ),
+        if (ring != null) ...[
+          const SizedBox(width: 16),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${ring.jumlahTransaksi} transaksi', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(formatRupiah(ring.penjualan), style: const TextStyle(fontSize: 16, color: Warna.teks2)),
+          ]),
+        ] else
+          FilledButton.icon(
+            key: const ValueKey('buka-shift'),
+            onPressed: onBukaShift,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Buka shift'),
+          ),
+      ]),
+    );
+
+    return Scaffold(
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        BarKepala(
+          judul: c.namaToko,
+          sub: 'Cabang ${c.nama} · ${c.kode}',
+          nama: '${p.nama} (${p.peran.label})',
+          keterangan: formatLayar(DateTime.now()),
+          onKeluar: app.keluar,
+        ),
+        Expanded(
+          child: ListView(padding: const EdgeInsets.fromLTRB(28, 18, 28, 24), children: [
+            for (final w in app.peringatan) ...[KotakPesan(w, jenis: JenisPesan.perhatian), const SizedBox(height: 12)],
+            kotakShift,
+            const SizedBox(height: 16),
+            Wrap(spacing: 16, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.start, children: [
+              GrupMenu(judul: 'PENJUALAN', warna: Warna.utama, latar: const Color(0xFFF2F8FF), ubin: grup(GrupKasir.penjualan)),
+              GrupMenu(judul: 'BARANG & STOK', warna: Warna.toska, latar: const Color(0xFFF0FAFA), ubin: grup(GrupKasir.barang)),
+              GrupMenu(judul: 'SHIFT', warna: Warna.merahIkon, latar: const Color(0xFFFFF5F5), ubin: grup(GrupKasir.shift)),
             ]),
           ]),
         ),

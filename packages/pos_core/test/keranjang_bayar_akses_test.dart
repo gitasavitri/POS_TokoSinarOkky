@@ -93,9 +93,17 @@ void main() {
       expect(aksesUntuk(Peran.kasir, Izin.aturPrinter), Akses.tidak);
     });
 
-    test('spv semua kecuali kelola karyawan; admin semua', () {
+    test('kasir: lihat stok boleh, HPP/opname/hitung amplop/modal tetap tidak (revisi C, P)', () {
+      expect(aksesUntuk(Peran.kasir, Izin.lihatStok), Akses.ya);
+      expect(aksesUntuk(Peran.kasir, Izin.lihatHpp), Akses.tidak);
+      expect(aksesUntuk(Peran.kasir, Izin.stokOpname), Akses.tidak);
+      expect(aksesUntuk(Peran.kasir, Izin.hitungShiftMenunggu), Akses.tidak);
+      expect(aksesUntuk(Peran.kasir, Izin.aturModalTetap), Akses.tidak);
+    });
+
+    test('spv semua kecuali kelola karyawan & modal tetap; admin semua', () {
       for (final i in Izin.values) {
-        expect(aksesUntuk(Peran.spv, i), i == Izin.kelolaKaryawan ? Akses.tidak : Akses.ya);
+        expect(aksesUntuk(Peran.spv, i), i == Izin.kelolaKaryawan || i == Izin.aturModalTetap ? Akses.tidak : Akses.ya);
         expect(aksesUntuk(Peran.admin, i), Akses.ya);
       }
       expect(bolehMenyetujui(Peran.kasir), isFalse);

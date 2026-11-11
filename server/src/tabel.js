@@ -40,6 +40,7 @@ export const TABEL = {
   shift_tutup: { kunci: ['shift_id'], mode: 'tambah', cabang: induk('SELECT cabang_id FROM shift WHERE id = ?', 'shift_id') },
   kas_shift: { kunci: ['id'], mode: 'tambah', cabang: { jenis: 'kolom' } },
   shift_hitung: { kunci: ['id'], mode: 'tambah', cabang: { jenis: 'kolom' } },
+  shift_belum_dihitung: { kunci: ['shift_id'], mode: 'tambah', cabang: { jenis: 'kolom' } },
   transaksi: { kunci: ['id'], mode: 'tambah', cabang: { jenis: 'kolom' } },
   transaksi_item: { kunci: ['id'], mode: 'tambah', cabang: lewatTransaksi('transaksi_id') },
   pembayaran: { kunci: ['id'], mode: 'tambah', cabang: lewatTransaksi('transaksi_id') },

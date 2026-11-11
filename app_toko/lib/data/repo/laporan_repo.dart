@@ -181,7 +181,7 @@ class LaporanRepo {
       .toList();
 
   /// Hal yang perlu dicek SPV/Admin: pembatalan, akun terkunci, koreksi menunggu, perubahan harga, selisih kas.
-  ({int batal, int terkunci, int koreksiMenunggu, int ubahHarga, int selisihKas}) perluDicek(
+  ({int batal, int terkunci, int koreksiMenunggu, int ubahHarga, int selisihKas, int shiftMenunggu}) perluDicek(
       String cabangId, DateTime dari, DateTime sampai) {
     int n(String sql, List<Object?> p) => _db.satu(sql, p)!['n']! as int;
     final a = isoUtc(dari), b = isoUtc(sampai);
@@ -202,6 +202,11 @@ class LaporanRepo {
           'SELECT COUNT(*) AS n FROM shift_tutup st JOIN shift s ON s.id = st.shift_id'
           ' WHERE s.cabang_id = ? AND st.selisih <> 0 AND st.ditutup_pada >= ? AND st.ditutup_pada < ?',
           [cabangId, a, b]),
+      // Tidak dibatasi tanggal: amplop dari kemarin yang belum dihitung tetap harus terlihat.
+      shiftMenunggu: n(
+          'SELECT COUNT(*) AS n FROM shift_belum_dihitung b LEFT JOIN shift_tutup t ON t.shift_id = b.shift_id'
+          ' WHERE b.cabang_id = ? AND t.shift_id IS NULL',
+          [cabangId]),
     );
   }
 

@@ -5,17 +5,22 @@ import 'package:pos_core/pos_core.dart';
 import '../layanan/aplikasi.dart';
 import 'halaman/barang_masuk.dart';
 import 'halaman/beranda.dart';
+import 'halaman/cek_stok.dart';
 import 'halaman/karyawan.dart';
 import 'halaman/kasir.dart';
 import 'halaman/koreksi.dart';
 import 'halaman/laporan.dart';
 import 'halaman/masuk.dart';
 import 'halaman/pengaturan.dart';
+import 'halaman/penjualan_shift.dart';
 import 'halaman/produk.dart';
 import 'halaman/retur.dart';
 import 'halaman/setup_awal.dart';
+import 'halaman/shift.dart';
+import 'halaman/transaksi.dart';
 import 'halaman/ubah_harga.dart';
 import 'komponen/kerangka.dart';
+import 'komponen/umum.dart';
 import 'tema.dart';
 
 class AplikasiToko extends StatefulWidget {
@@ -73,24 +78,100 @@ class _Akar extends StatelessWidget {
   }
 }
 
-/// Kasir: layar penjualan, bisa membuka barang masuk / ubah harga / pengaturan printer sebagai layar penuh.
-class _AlurKasir extends StatelessWidget {
+/// Kasir: menu ikon (revisi B). Transaksi, penjualan shift sendiri, cetak ulang struk, cek stok & harga,
+/// barang masuk, ubah harga, minta koreksi, order barang (menyusul), tutup shift.
+/// Kembali ke menu atau keluar tidak menutup shift.
+class _AlurKasir extends StatefulWidget {
   const _AlurKasir({super.key});
+  @override
+  State<_AlurKasir> createState() => _AlurKasirState();
+}
+
+class _AlurKasirState extends State<_AlurKasir> {
+  MenuKasir _menu = MenuKasir.beranda;
+
+  /// Barang dari "Ubah transaksi" yang dibawa ke layar Transaksi.
+  IsiUlang? _isi;
+  int _kunciTransaksi = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Setelah listrik padam: ada belanjaan belum dibayar / struk belum tercetak → langsung ke layar Transaksi.
+    final app = context.app;
+    final t = app.pemulihan.muatKeranjang(app.cabang.id);
+    if (app.pemulihan.strukBelumCetak() != null || (t != null && !t.kosong)) _menu = MenuKasir.transaksi;
+  }
+
+  Future<void> _buka(MenuKasir m) async {
+    final app = context.app;
+    switch (m) {
+      case MenuKasir.mintaKoreksi:
+        return bukaRiwayatBarangMasuk(context);
+      case MenuKasir.orderBarang:
+        return tampilkanPesan(context, 'Order barang menyusul (revisi G, tahap 4).');
+      case MenuKasir.tutupShift:
+        if (app.shiftAktif == null) return tampilkanPesan(context, 'Belum ada shift yang dibuka.', galat: true);
+        final selesai = await tutupShiftDialog(context);
+        if (selesai == true && mounted) app.keluar();
+        return;
+      default:
+        setState(() {
+          _menu = m;
+          if (m != MenuKasir.transaksi) _isi = null;
+        });
+    }
+  }
+
+  void _keTransaksi(IsiUlang isi) => setState(() {
+        _isi = isi;
+        _kunciTransaksi++;
+        _menu = MenuKasir.transaksi;
+      });
+
+  Future<void> _bukaShift() async {
+    final app = context.app;
+    final s = await bukaShiftDialog(context);
+    if (s != null && mounted) app.aturShift(s);
+  }
 
   @override
   Widget build(BuildContext context) {
-    void buka(String judul, Widget isi) => Navigator.of(context).push(MaterialPageRoute<void>(
+    void dorong(String judul, Widget isi) => Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => HalamanPenuh(judul: judul, child: isi),
         ));
-    return HalamanKasir(
-      onBukaBarangMasuk: () => buka('Barang masuk', const IsiBarangMasuk()),
-      onBukaUbahHarga: () => buka('Ubah harga', const IsiUbahHarga()),
-      onBukaPengaturan: () => buka('Pengaturan printer', const IsiPengaturan(hanyaPrinter: true)),
+    if (_menu == MenuKasir.transaksi) {
+      return HalamanKasir(
+        key: ValueKey('transaksi-$_kunciTransaksi'),
+        isiAwal: _isi,
+        onKembaliKeMenu: () => setState(() {
+          _isi = null;
+          _menu = MenuKasir.beranda;
+        }),
+        // Dari layar Transaksi dibuka di atasnya, supaya belanjaan di layar tidak hilang.
+        onBukaBarangMasuk: () => dorong('Barang masuk', const IsiBarangMasuk()),
+        onBukaUbahHarga: () => dorong('Ubah harga', const IsiUbahHarga()),
+        onBukaPengaturan: () => dorong('Pengaturan printer', const IsiPengaturan(hanyaPrinter: true)),
+      );
+    }
+    if (_menu == MenuKasir.beranda) return MenuBerandaKasir(onMenu: _buka, onBukaShift: _bukaShift);
+    final isi = switch (_menu) {
+      MenuKasir.penjualanShift => IsiPenjualanShift(onIsiUlang: _keTransaksi),
+      MenuKasir.cetakUlang => IsiCetakUlang(onIsiUlang: _keTransaksi),
+      MenuKasir.cekStok => const IsiCekStok(),
+      MenuKasir.barangMasuk => const IsiBarangMasuk(),
+      MenuKasir.ubahHarga => const IsiUbahHarga(),
+      _ => const SizedBox(),
+    };
+    return KerangkaMenu(
+      judul: _menu.label,
+      onKembali: () => setState(() => _menu = MenuKasir.beranda),
+      child: KeyedSubtree(key: ValueKey(_menu), child: isi),
     );
   }
 }
 
-/// Layar penuh dengan kepala hijau dan tombol kembali ke penjualan (untuk kasir).
+/// Layar penuh dengan kepala biru dan tombol kembali ke penjualan (dibuka dari layar Transaksi kasir).
 class HalamanPenuh extends StatelessWidget {
   const HalamanPenuh({super.key, required this.judul, required this.child});
   final String judul;
@@ -154,6 +235,7 @@ class _HalamanAdminState extends State<HalamanAdmin> {
       MenuAdmin.koreksi => const IsiKoreksi(),
       MenuAdmin.produk => const IsiProduk(),
       MenuAdmin.retur => const IsiRetur(),
+      MenuAdmin.shiftMenunggu => const IsiShiftMenunggu(),
       MenuAdmin.laporan => const IsiLaporan(),
       MenuAdmin.log => const IsiLog(),
       MenuAdmin.karyawan => const IsiKaryawan(),

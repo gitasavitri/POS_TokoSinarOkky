@@ -37,7 +37,8 @@ class PenjualanRepo {
   Shift? shiftAktif(String kasirId) {
     final r = _db.satu(
       'SELECT s.* FROM shift s LEFT JOIN shift_tutup t ON t.shift_id = s.id'
-      ' WHERE s.kasir_id = ? AND t.shift_id IS NULL ORDER BY s.dibuka_pada DESC LIMIT 1',
+      ' LEFT JOIN shift_belum_dihitung b ON b.shift_id = s.id'
+      ' WHERE s.kasir_id = ? AND t.shift_id IS NULL AND b.shift_id IS NULL ORDER BY s.dibuka_pada DESC LIMIT 1',
       [kasirId],
     );
     return r == null ? null : _shift(r);
@@ -78,7 +79,9 @@ class PenjualanRepo {
     )!;
     // Retur dibayar tunai dari laci kasir, dicatat di shift yang aktif saat retur (lewat waktu & cabang).
     final cabangId = _db.satu('SELECT cabang_id FROM shift WHERE id = ?', [shiftId])!['cabang_id'];
-    final ditutup = _db.satu('SELECT ditutup_pada FROM shift_tutup WHERE shift_id = ?', [shiftId])?['ditutup_pada'];
+    // Shift "Belum dihitung": batas waktunya saat kasir menutup, bukan saat amplop dihitung SPV/Admin.
+    final ditutup = _db.satu('SELECT ditutup_pada FROM shift_belum_dihitung WHERE shift_id = ?', [shiftId])?['ditutup_pada'] ??
+        _db.satu('SELECT ditutup_pada FROM shift_tutup WHERE shift_id = ?', [shiftId])?['ditutup_pada'];
     final retur = _db.satu(
       'SELECT IFNULL(SUM(r.total_kembali), 0) AS n FROM retur r JOIN transaksi t ON t.id = r.transaksi_id'
       ' WHERE t.cabang_id = ? AND r.created_at >= ? AND r.created_at <= ?',
@@ -101,7 +104,33 @@ class PenjualanRepo {
     );
   }
 
-  bool _shiftDitutup(String shiftId) => _db.satu('SELECT 1 FROM shift_tutup WHERE shift_id = ?', [shiftId]) != null;
+  /// Sudah ditutup: dihitung (shift_tutup) atau "Belum dihitung" (menunggu amplop dihitung).
+  bool _shiftDitutup(String shiftId) =>
+      _db.satu('SELECT 1 FROM shift_tutup WHERE shift_id = ?', [shiftId]) != null ||
+      _db.satu('SELECT 1 FROM shift_belum_dihitung WHERE shift_id = ?', [shiftId]) != null;
+
+  /// Transaksi di satu shift, terbaru dulu (Penjualan shift saya, revisi D).
+  List<BarisTransaksi> transaksiShift(String shiftId) => _db
+      .pilih(
+        'SELECT t.id, t.no_transaksi, t.created_at, t.jumlah_barang, t.total, p.metode, u.nama AS kasir,'
+        ' (x.transaksi_id IS NOT NULL) AS batal, EXISTS(SELECT 1 FROM retur r WHERE r.transaksi_id = t.id) AS retur'
+        ' FROM transaksi t JOIN pembayaran p ON p.transaksi_id = t.id JOIN pengguna u ON u.id = t.kasir_id'
+        ' LEFT JOIN pembatalan x ON x.transaksi_id = t.id'
+        ' WHERE t.shift_id = ? ORDER BY t.created_at DESC, t.no_transaksi DESC',
+        [shiftId],
+      )
+      .map((r) => BarisTransaksi(
+            id: r['id'] as String,
+            noTransaksi: r['no_transaksi'] as String,
+            waktu: DateTime.parse(r['created_at'] as String),
+            kasir: r['kasir'] as String,
+            jumlahBarang: r['jumlah_barang'] as int,
+            total: r['total'] as int,
+            metode: MetodeBayar.dariKode(r['metode'] as String),
+            dibatalkan: r['batal'] == 1,
+            adaRetur: r['retur'] == 1,
+          ))
+      .toList();
 
   // ---------------------------------------------------------------- kas keluar / masuk
 
@@ -248,6 +277,118 @@ class PenjualanRepo {
       });
     });
     return ring;
+  }
+
+  // ---------------------------------------------------------------- tutup shift "Belum dihitung" (revisi P)
+
+  /// Kasir menutup shift tanpa menghitung uang. Uang (kecuali [modalTetap]) dimasukkan ke amplop berlabel,
+  /// shift berstatus "menunggu dihitung". Hanya boleh sebelum uang dihitung (kalau sudah dihitung, tutup biasa).
+  ShiftMenunggu tutupShiftBelumDihitung({required String shiftId, required Pengguna oleh, required int modalTetap}) {
+    if (modalTetap < 0) throw ArgumentError('Modal tetap tidak boleh minus');
+    final sh = _db.satu('SELECT s.cabang_id, s.kasir_id, s.dibuka_pada, u.nama FROM shift s JOIN pengguna u ON u.id = s.kasir_id WHERE s.id = ?',
+        [shiftId]);
+    if (sh == null) throw ArgumentError('Shift tidak ditemukan');
+    if (_shiftDitutup(shiftId)) throw StateError('Shift sudah ditutup');
+    final ring = ringkasanShift(shiftId);
+    if (hitunganBerlaku(shiftId, ring: ring) > 0) {
+      throw StateError('Uang shift ini sudah dihitung. Tutup shift dengan hitungan itu.');
+    }
+    final cabangId = sh['cabang_id'] as String;
+    final waktu = _db.sekarang();
+    final modal = hitungModalDitinggal(modalTetap: modalTetap, kasSistem: ring.kasSistem);
+    final label = labelAmplop(
+      namaKasir: sh['nama'] as String,
+      dibuka: formatLayar(DateTime.parse(sh['dibuka_pada'] as String)),
+      ditutup: formatJam(waktu),
+    );
+    _db.transaksi(() {
+      _db.jalankan(
+        'INSERT INTO shift_belum_dihitung (shift_id, cabang_id, kas_sistem, modal_ditinggal, label_amplop, ditutup_oleh, ditutup_pada)'
+        ' VALUES (?,?,?,?,?,?,?)',
+        [shiftId, cabangId, ring.kasSistem, modal, label, oleh.id, isoUtc(waktu)],
+      );
+      _db.outbox('shift_belum_dihitung', shiftId, kolomKunci: 'shift_id');
+      _db.log(cabangId: cabangId, penggunaId: oleh.id, aksi: 'tutup_shift_belum_dihitung', detail: {
+        'shift_id': shiftId,
+        'kasir_id': sh['kasir_id'],
+        'kas_sistem': ring.kasSistem,
+        'modal_ditinggal': modal,
+        'jumlah_transaksi': ring.jumlahTransaksi,
+      });
+    });
+    return shiftMenungguDihitung(cabangId).firstWhere((m) => m.shiftId == shiftId);
+  }
+
+  /// Shift yang amplopnya belum dihitung, terlama dulu (daftar untuk SPV/Admin).
+  List<ShiftMenunggu> shiftMenungguDihitung(String cabangId) => _db
+      .pilih(
+        'SELECT b.*, s.kasir_id, s.modal_awal, s.dibuka_pada, u.nama AS kasir,'
+        ' (SELECT COUNT(*) FROM transaksi t LEFT JOIN pembatalan x ON x.transaksi_id = t.id'
+        '   WHERE t.shift_id = s.id AND x.transaksi_id IS NULL) AS n'
+        ' FROM shift_belum_dihitung b JOIN shift s ON s.id = b.shift_id JOIN pengguna u ON u.id = s.kasir_id'
+        ' LEFT JOIN shift_tutup t ON t.shift_id = b.shift_id'
+        ' WHERE b.cabang_id = ? AND t.shift_id IS NULL ORDER BY b.ditutup_pada',
+        [cabangId],
+      )
+      .map((r) => ShiftMenunggu(
+            shiftId: r['shift_id'] as String,
+            kasirId: r['kasir_id'] as String,
+            namaKasir: r['kasir'] as String,
+            modalAwal: r['modal_awal'] as int,
+            dibukaPada: DateTime.parse(r['dibuka_pada'] as String),
+            ditutupPada: DateTime.parse(r['ditutup_pada'] as String),
+            kasSistem: r['kas_sistem'] as int,
+            modalDitinggal: r['modal_ditinggal'] as int,
+            labelAmplop: r['label_amplop'] as String,
+            jumlahTransaksi: r['n'] as int,
+          ))
+      .toList();
+
+  /// SPV/Admin mengisi hasil hitungan amplop. Sistem menulis hitungan + menutup shift; selisih tercatat
+  /// ke kasir shift itu. Hanya sekali (setelah itu shift_tutup terkunci).
+  HasilHitungAmplop hitungAmplop({required String shiftId, required int amplopDihitung, required Pengguna oleh}) {
+    if (aksesUntuk(oleh.peran, Izin.hitungShiftMenunggu) != Akses.ya) {
+      throw StateError('Hanya SPV atau Admin yang boleh menghitung amplop shift.');
+    }
+    if (amplopDihitung < 0) throw ArgumentError('Isi amplop tidak boleh minus');
+    final b = _db.satu(
+      'SELECT b.*, s.kasir_id FROM shift_belum_dihitung b JOIN shift s ON s.id = b.shift_id WHERE b.shift_id = ?',
+      [shiftId],
+    );
+    if (b == null) throw StateError('Shift ini tidak menunggu dihitung');
+    if (_db.satu('SELECT 1 FROM shift_tutup WHERE shift_id = ?', [shiftId]) != null) {
+      throw StateError('Amplop shift ini sudah dihitung');
+    }
+    final cabangId = b['cabang_id'] as String;
+    final kasSistem = b['kas_sistem'] as int;
+    final modal = b['modal_ditinggal'] as int;
+    final kas = hitungKasDariAmplop(amplopDihitung: amplopDihitung, modalDitinggal: modal);
+    final selisih = hitungSelisihAmplop(amplopDihitung: amplopDihitung, modalDitinggal: modal, kasSistem: kasSistem);
+    final ke = hitunganShift(shiftId).length + 1;
+    final t = _db.sekarangIso();
+    final hitungId = buatId();
+    _db.transaksi(() {
+      _db.jalankan(
+        'INSERT INTO shift_hitung (id, cabang_id, shift_id, ke, kas_dihitung, kas_sistem, selisih, dihitung_oleh, disetujui_oleh, created_at)'
+        ' VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [hitungId, cabangId, shiftId, ke, kas, kasSistem, selisih, oleh.id, null, t],
+      );
+      _db.outbox('shift_hitung', hitungId);
+      _db.jalankan(
+        'INSERT INTO shift_tutup (shift_id, kas_dihitung, kas_sistem, selisih, ditutup_oleh, ditutup_pada) VALUES (?,?,?,?,?,?)',
+        [shiftId, kas, kasSistem, selisih, oleh.id, t],
+      );
+      _db.outbox('shift_tutup', shiftId, kolomKunci: 'shift_id');
+      _db.log(cabangId: cabangId, penggunaId: oleh.id, aksi: 'hitung_amplop_shift', detail: {
+        'shift_id': shiftId,
+        'kasir_id': b['kasir_id'],
+        'amplop_dihitung': amplopDihitung,
+        'modal_ditinggal': modal,
+        'kas_sistem': kasSistem,
+        'selisih': selisih,
+      });
+    });
+    return HasilHitungAmplop(amplopDihitung: amplopDihitung, modalDitinggal: modal, kasSistem: kasSistem, selisih: selisih);
   }
 
   // ---------------------------------------------------------------- transaksi
@@ -441,6 +582,37 @@ class PenjualanRepo {
       pesanBawah: cabang.pesanStruk,
       dibatalkan: sudahDibatalkan(transaksiId),
       cetakUlang: true,
+    );
+  }
+
+  /// Detail transaksi untuk layar riwayat (revisi E): barang per baris seperti daftar belanja kasir.
+  DetailTransaksi? detailTransaksi(String transaksiId, InfoCabang cabang) {
+    final s = struk(transaksiId, cabang);
+    if (s == null) return null;
+    final item = _db
+        .pilih(
+          'SELECT i.barang_id, i.nama_barang, i.qty, i.harga_satuan, i.harga_grosir, i.subtotal,'
+          ' IFNULL((SELECT SUM(ri.qty) FROM retur_item ri WHERE ri.transaksi_item_id = i.id), 0) AS sudah'
+          ' FROM transaksi_item i WHERE i.transaksi_id = ? ORDER BY i.rowid',
+          [transaksiId],
+        )
+        .map((r) => ItemDetailTransaksi(
+              barangId: r['barang_id'] as String,
+              nama: r['nama_barang'] as String,
+              qty: r['qty'] as int,
+              hargaSatuan: r['harga_satuan'] as int,
+              isGrosir: r['harga_grosir'] == 1,
+              subtotal: r['subtotal'] as int,
+              sudahRetur: r['sudah'] as int,
+            ))
+        .toList();
+    final t = _db.satu('SELECT kasir_id FROM transaksi WHERE id = ?', [transaksiId])!;
+    return DetailTransaksi(
+      id: transaksiId,
+      struk: s,
+      item: item,
+      adaRetur: item.any((i) => i.sudahRetur > 0),
+      kasirId: t['kasir_id'] as String,
     );
   }
 

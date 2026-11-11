@@ -219,4 +219,29 @@ harus_ditolak(db, "kas keluar setelah shift ditutup ditolak",
 harus_ditolak(db, "hitungan setelah shift ditutup ditolak",
               "INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh, 3, 1, 1, 0, kasir, None, T0))
 
+harus_ditolak(db, "transaksi baru di shift yang sudah ditutup ditolak",
+              "INSERT INTO transaksi VALUES (?,?,?,?,?,?,?,?)", (uid(), cab_a, "TRX-A01-261101-0999", sh, kasir, 1000, 1, T0))
+
+# Revisi P: tutup shift "Belum dihitung" (migrasi 003)
+sh2 = uid()
+db.execute("INSERT INTO shift VALUES (?,?,?,?,?)", (sh2, cab_a, kasir, 200000, T0))
+db.execute("INSERT INTO shift_belum_dihitung VALUES (?,?,?,?,?,?,?)", (sh2, cab_a, 845000, 200000, "Siti · 08.00–16.05", kasir, T0))
+cek("shift ditutup belum dihitung tersimpan", db.execute("SELECT COUNT(*) FROM shift_belum_dihitung").fetchone()[0] == 1)
+harus_ditolak(db, "shift belum dihitung tidak bisa dicatat dua kali",
+              "INSERT INTO shift_belum_dihitung VALUES (?,?,?,?,?,?,?)", (sh2, cab_a, 1, 0, "x", kasir, T0))
+harus_ditolak(db, "modal ditinggal minus ditolak",
+              "INSERT INTO shift_belum_dihitung VALUES (?,?,?,?,?,?,?)", (uid(), cab_a, 1, -1, "x", kasir, T0))
+harus_ditolak(db, "shift_belum_dihitung tidak bisa diubah", "UPDATE shift_belum_dihitung SET kas_sistem = 1")
+harus_ditolak(db, "shift_belum_dihitung tidak bisa dihapus", "DELETE FROM shift_belum_dihitung")
+harus_ditolak(db, "kas keluar di shift menunggu dihitung ditolak",
+              "INSERT INTO kas_shift VALUES (?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh2, "keluar", 5000, "Beli galon", kasir, None, T0))
+harus_ditolak(db, "transaksi di shift menunggu dihitung ditolak",
+              "INSERT INTO transaksi VALUES (?,?,?,?,?,?,?,?)", (uid(), cab_a, "TRX-A01-261101-0998", sh2, kasir, 1000, 1, T0))
+# SPV menghitung amplop belakangan: hitungan + shift_tutup tetap boleh.
+db.execute("INSERT INTO shift_hitung VALUES (?,?,?,?,?,?,?,?,?,?)", (uid(), cab_a, sh2, 1, 830000, 845000, -15000, kasir, None, T0))
+db.execute("INSERT INTO shift_tutup VALUES (?,?,?,?,?,?)", (sh2, 830000, 845000, -15000, kasir, T0))
+cek("amplop dihitung belakangan → shift_tutup", db.execute("SELECT selisih FROM shift_tutup WHERE shift_id = ?", (sh2,)).fetchone()[0] == -15000)
+harus_ditolak(db, "shift yang sudah ditutup tidak bisa ditutup belum dihitung",
+              "INSERT INTO shift_belum_dihitung VALUES (?,?,?,?,?,?,?)", (sh, cab_a, 1, 0, "x", kasir, T0))
+
 print(f"\nSemua {lulus} pengujian lulus.")

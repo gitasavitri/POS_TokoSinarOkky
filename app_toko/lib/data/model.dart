@@ -187,6 +187,79 @@ class HitunganShift {
 }
 
 /// Ringkasan transaksi untuk daftar/laporan.
+/// Shift yang ditutup kasir "Belum dihitung" dan amplopnya belum dihitung SPV/Admin (revisi P).
+class ShiftMenunggu {
+  const ShiftMenunggu({
+    required this.shiftId,
+    required this.kasirId,
+    required this.namaKasir,
+    required this.modalAwal,
+    required this.dibukaPada,
+    required this.ditutupPada,
+    required this.kasSistem,
+    required this.modalDitinggal,
+    required this.labelAmplop,
+    required this.jumlahTransaksi,
+  });
+
+  final String shiftId;
+  final String kasirId;
+  final String namaKasir;
+  final int modalAwal;
+  final DateTime dibukaPada;
+  final DateTime ditutupPada;
+
+  /// Uang tunai seharusnya saat ditutup. Hanya untuk SPV/Admin, tampilkan SETELAH amplop dihitung.
+  final int kasSistem;
+  final int modalDitinggal;
+  final String labelAmplop;
+  final int jumlahTransaksi;
+}
+
+/// Hasil SPV/Admin menghitung amplop shift "Belum dihitung".
+class HasilHitungAmplop {
+  const HasilHitungAmplop({required this.amplopDihitung, required this.modalDitinggal, required this.kasSistem, required this.selisih});
+  final int amplopDihitung;
+  final int modalDitinggal;
+  final int kasSistem;
+  final int selisih;
+  int get amplopSeharusnya => hitungIsiAmplopSeharusnya(kasSistem: kasSistem, modalDitinggal: modalDitinggal);
+}
+
+/// Satu baris barang di detail riwayat transaksi (revisi E).
+class ItemDetailTransaksi {
+  const ItemDetailTransaksi({
+    required this.barangId,
+    required this.nama,
+    required this.qty,
+    required this.hargaSatuan,
+    required this.isGrosir,
+    required this.subtotal,
+    required this.sudahRetur,
+  });
+  final String barangId;
+  final String nama;
+  final int qty;
+  final int hargaSatuan;
+  final bool isGrosir;
+  final int subtotal;
+  final int sudahRetur;
+}
+
+/// Detail transaksi untuk layar riwayat: data struk (cetak ulang) + barang per baris.
+class DetailTransaksi {
+  const DetailTransaksi({required this.id, required this.struk, required this.item, required this.adaRetur, required this.kasirId});
+  final String id;
+  final DataStruk struk;
+  final List<ItemDetailTransaksi> item;
+  final bool adaRetur;
+  final String kasirId;
+
+  bool get dibatalkan => struk.dibatalkan;
+  int get jumlahBarang => item.fold(0, (n, i) => n + i.qty);
+  String get status => dibatalkan ? 'Dibatalkan' : (adaRetur ? 'Retur' : 'Lunas');
+}
+
 class BarisTransaksi {
   const BarisTransaksi({
     required this.id,

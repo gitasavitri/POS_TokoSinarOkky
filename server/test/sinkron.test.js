@@ -124,6 +124,35 @@ describe('Server Pusat', { skip: lewati }, () => {
     assert.match(palsu.isi.ditolak[0].alasan, /bukan milik cabang/);
   });
 
+  test('shift "Belum dihitung" + hitungan amplop SPV ikut terkirim; toko B tidak bisa menulisnya untuk toko A', async () => {
+    const jual = penjualanContoh(A, { no: 3, waktu: '2026-10-02T04:00:00Z' });
+    const belum = {
+      shift_id: jual.shift.id, cabang_id: A.cabang.id, kas_sistem: 845000, modal_ditinggal: 200000,
+      label_amplop: 'Kasir A · 02/10 11.00–16.05', ditutup_oleh: A.kasir.id, ditutup_pada: '2026-10-02T09:05:00Z',
+    };
+    const hitung = {
+      id: crypto.randomUUID(), cabang_id: A.cabang.id, shift_id: jual.shift.id, ke: 1, kas_dihitung: 830000, kas_sistem: 845000,
+      selisih: -15000, dihitung_oleh: A.admin.id, disetujui_oleh: null, created_at: '2026-10-03T02:00:00Z',
+    };
+    const r = await minta('POST', '/api/sinkron/kirim', {
+      token: perangkat.A.token,
+      isi: { item: [item('shift', jual.shift), item('shift_belum_dihitung', belum, belum.shift_id), item('shift_hitung', hitung)] },
+    });
+    assert.deepEqual(r.isi.ditolak, []);
+    const [[b]] = await db.pool.query('SELECT kas_sistem, modal_ditinggal FROM shift_belum_dihitung WHERE shift_id = ?', [jual.shift.id]);
+    assert.equal(Number(b.kas_sistem), 845000);
+    assert.equal(Number(b.modal_ditinggal), 200000);
+    await assert.rejects(db.pool.query('UPDATE shift_belum_dihitung SET kas_sistem = 1'), /tidak boleh diubah/);
+    await assert.rejects(db.pool.query('DELETE FROM shift_belum_dihitung'), /tidak boleh dihapus/);
+
+    const palsu = await minta('POST', '/api/sinkron/kirim', {
+      token: perangkat.B.token,
+      isi: { item: [(() => { const x = { ...belum, shift_id: crypto.randomUUID() }; return item('shift_belum_dihitung', x, x.shift_id); })()] },
+    });
+    assert.equal(palsu.isi.diterima.length, 0);
+    assert.match(palsu.isi.ditolak[0].alasan, /bukan milik cabang/);
+  });
+
   test('toko B tidak bisa menulis data toko A, dan tidak bisa membuat harga untuk semua toko', async () => {
     await minta('POST', '/api/sinkron/kirim', { token: perangkat.B.token, isi: { item: itemSetup(B) } });
     const palsu = { ...penjualanContoh(A, { no: 99 }) };

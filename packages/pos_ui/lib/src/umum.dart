@@ -72,6 +72,7 @@ class Lencana extends StatelessWidget {
       case 'Retur':
       case 'Ada retur':
       case 'Menipis':
+      case 'Hampir habis':
       case 'Menunggu':
       case 'menunggu':
         return Lencana(teks, latar: Warna.oranyeMuda, warna: Warna.oranyeTua);

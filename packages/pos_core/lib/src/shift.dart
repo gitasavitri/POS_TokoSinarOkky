@@ -66,3 +66,34 @@ int sisaHitungUlang(int sudahDihitung) {
   if (sudahDihitung <= 0) return maksHitungUlangKasir;
   return sisa < 0 ? 0 : sisa;
 }
+
+// ------------------------------------------------------------------ tutup shift "Belum dihitung" (revisi P)
+
+/// Uang modal yang tetap ditinggal di kasir saat shift ditutup "Belum dihitung". Sisanya masuk amplop.
+/// Kalau uang seharusnya kurang dari modal tetap, semua uang tetap di kasir (amplop kosong).
+int hitungModalDitinggal({required int modalTetap, required int kasSistem}) {
+  if (modalTetap <= 0 || kasSistem <= 0) return 0;
+  return kasSistem < modalTetap ? kasSistem : modalTetap;
+}
+
+/// Uang yang seharusnya ada di amplop: uang seharusnya dikurangi modal yang ditinggal.
+/// JANGAN ditampilkan ke kasir (hitung buta); hanya untuk SPV/Admin setelah amplop dihitung.
+int hitungIsiAmplopSeharusnya({required int kasSistem, required int modalDitinggal}) {
+  final n = kasSistem - modalDitinggal;
+  return n < 0 ? 0 : n;
+}
+
+/// Uang tunai yang terhitung untuk shift itu: isi amplop + modal yang ditinggal di kasir.
+int hitungKasDariAmplop({required int amplopDihitung, required int modalDitinggal}) {
+  if (amplopDihitung < 0) throw ArgumentError('Isi amplop tidak boleh minus');
+  if (modalDitinggal < 0) throw ArgumentError('Modal tidak boleh minus');
+  return amplopDihitung + modalDitinggal;
+}
+
+/// Selisih kas shift yang dihitung belakangan oleh SPV/Admin. Negatif = uang kurang (tercatat ke kasir shift itu).
+int hitungSelisihAmplop({required int amplopDihitung, required int modalDitinggal, required int kasSistem}) =>
+    hitungKasDariAmplop(amplopDihitung: amplopDihitung, modalDitinggal: modalDitinggal) - kasSistem;
+
+/// Tulisan label amplop, mis. "Siti · 11/11/2026 08.00–16.05".
+String labelAmplop({required String namaKasir, required String dibuka, required String ditutup}) =>
+    '${namaKasir.trim()} · $dibuka–$ditutup';

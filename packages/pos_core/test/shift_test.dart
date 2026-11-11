@@ -62,4 +62,48 @@ void main() {
       expect(sisaHitungUlang(9), 0);
     });
   });
+
+  group('tutup shift "Belum dihitung" (revisi P)', () {
+    test('modal tetap ditinggal di kasir, sisanya amplop', () {
+      expect(hitungModalDitinggal(modalTetap: 200000, kasSistem: 845000), 200000);
+      expect(hitungIsiAmplopSeharusnya(kasSistem: 845000, modalDitinggal: 200000), 645000);
+    });
+
+    test('tanpa modal tetap: semua uang masuk amplop', () {
+      expect(hitungModalDitinggal(modalTetap: 0, kasSistem: 845000), 0);
+      expect(hitungIsiAmplopSeharusnya(kasSistem: 845000, modalDitinggal: 0), 845000);
+    });
+
+    test('uang seharusnya kurang dari modal tetap: semua tetap di kasir, amplop kosong', () {
+      expect(hitungModalDitinggal(modalTetap: 200000, kasSistem: 150000), 150000);
+      expect(hitungIsiAmplopSeharusnya(kasSistem: 150000, modalDitinggal: 150000), 0);
+      expect(hitungModalDitinggal(modalTetap: 200000, kasSistem: -5000), 0);
+    });
+
+    test('selisih = isi amplop + modal ditinggal − uang seharusnya', () {
+      expect(hitungSelisihAmplop(amplopDihitung: 645000, modalDitinggal: 200000, kasSistem: 845000), 0);
+      expect(hitungSelisihAmplop(amplopDihitung: 630000, modalDitinggal: 200000, kasSistem: 845000), -15000);
+      expect(hitungSelisihAmplop(amplopDihitung: 650000, modalDitinggal: 200000, kasSistem: 845000), 5000);
+      expect(hitungKasDariAmplop(amplopDihitung: 630000, modalDitinggal: 200000), 830000);
+      expect(() => hitungKasDariAmplop(amplopDihitung: -1, modalDitinggal: 0), throwsArgumentError);
+    });
+
+    test('label amplop', () {
+      expect(labelAmplop(namaKasir: ' Siti ', dibuka: '08.00', ditutup: '16.05'), 'Siti · 08.00–16.05');
+    });
+  });
+
+  group('status stok (revisi C)', () {
+    test('habis, hampir habis, aman', () {
+      expect(statusStok(stok: 0, stokMinimum: 5), StatusStok.habis);
+      expect(statusStok(stok: -2, stokMinimum: 0), StatusStok.habis);
+      expect(statusStok(stok: 5, stokMinimum: 5), StatusStok.hampirHabis);
+      expect(statusStok(stok: 3, stokMinimum: 5), StatusStok.hampirHabis);
+      expect(statusStok(stok: 6, stokMinimum: 5), StatusStok.aman);
+      expect(statusStok(stok: 1, stokMinimum: 0), StatusStok.aman, reason: 'stok minimum belum diatur');
+      expect(StatusStok.habis.perluDiorder, isTrue);
+      expect(StatusStok.hampirHabis.perluDiorder, isTrue);
+      expect(StatusStok.aman.perluDiorder, isFalse);
+    });
+  });
 }

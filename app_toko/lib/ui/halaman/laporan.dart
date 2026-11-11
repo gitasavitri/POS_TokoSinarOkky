@@ -178,6 +178,9 @@ const _namaAksi = {
   'tutup_shift': 'Tutup shift',
   'hitung_uang_shift': 'Hitung uang tutup shift',
   'hitung_ulang_shift': 'Hitung ulang uang shift',
+  'tutup_shift_belum_dihitung': 'Tutup shift (belum dihitung)',
+  'hitung_amplop_shift': 'Hitung amplop shift',
+  'atur_modal_tetap': 'Atur modal tetap',
   'kas_keluar': 'Kas keluar',
   'kas_masuk': 'Kas masuk',
   'ganti_alamat_server': 'Ganti alamat server',
@@ -204,7 +207,7 @@ const _namaAksi = {
 
 const _aksiPenting = {
   'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'koreksi_disetujui', 'stok_opname', 'retur',
-  'hitung_ulang_shift', 'kas_keluar',
+  'hitung_ulang_shift', 'kas_keluar', 'tutup_shift_belum_dihitung', 'hitung_amplop_shift',
 };
 
 String ringkasDetail(String aksi, Map<String, Object?> d) {
@@ -221,6 +224,11 @@ String ringkasDetail(String aksi, Map<String, Object?> d) {
     case 'hitung_uang_shift':
     case 'hitung_ulang_shift':
       return 'hitungan ke-${n('ke')}: ${formatAngka(n('kas_dihitung') ?? 0)}, selisih ${formatAngka(n('selisih') ?? 0)}';
+    case 'tutup_shift_belum_dihitung':
+      return 'amplop belum dihitung · ${n('jumlah_transaksi') ?? 0} transaksi · modal ditinggal ${formatAngka(n('modal_ditinggal') ?? 0)}';
+    case 'hitung_amplop_shift':
+      return 'isi amplop ${formatAngka(n('amplop_dihitung') ?? 0)} + modal ${formatAngka(n('modal_ditinggal') ?? 0)}, '
+          'seharusnya ${formatAngka(n('kas_sistem') ?? 0)}, selisih ${formatAngka(n('selisih') ?? 0)}';
     case 'kas_keluar':
     case 'kas_masuk':
       return '${formatRupiah(n('jumlah') ?? 0)} · ${d['keterangan']}';

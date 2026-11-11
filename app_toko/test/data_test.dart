@@ -435,6 +435,113 @@ void main() {
     });
   });
 
+  group('tutup shift "Belum dihitung" (revisi P)', () {
+    test('kasir menutup tanpa menghitung → menunggu dihitung; SPV menghitung amplop, selisih tercatat ke kasir', () {
+      final id = masukkanGula();
+      final gula = katalog.untukKasir(id, cabang.id)!;
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 200000);
+      jual.simpan(cabang: cabang, kasir: kasir, shift: shift, keranjang: Keranjang()..tambah(gula, qty: 2), metode: MetodeBayar.tunai, uangDiterima: 50000);
+      jam.maju();
+      jual.catatKas(shiftId: shift.id, jenis: JenisKas.keluar, jumlah: 10000, keterangan: 'Beli galon', oleh: kasir);
+      jam.maju();
+      // Uang seharusnya: 200.000 + 35.000 − 10.000 = 225.000. Modal tetap 200.000 → amplop seharusnya 25.000.
+      final m = jual.tutupShiftBelumDihitung(shiftId: shift.id, oleh: kasir, modalTetap: 200000);
+      expect(m.kasSistem, 225000);
+      expect(m.modalDitinggal, 200000);
+      expect(m.namaKasir, 'Siti');
+      expect(m.labelAmplop, startsWith('Siti · '));
+      expect(m.jumlahTransaksi, 1);
+      expect(jual.shiftAktif(kasir.id), isNull, reason: 'shift tidak aktif lagi');
+      expect(jual.shiftMenungguDihitung(cabang.id).map((x) => x.shiftId), [shift.id]);
+      expect(LaporanRepo(db).perluDicek(cabang.id, DateTime.utc(2000), DateTime.utc(2100)).shiftMenunggu, 1);
+      expect(() => jual.catatKas(shiftId: shift.id, jenis: JenisKas.masuk, jumlah: 1000, keterangan: 'telat', oleh: kasir), throwsStateError);
+      expect(() => jual.simpan(cabang: cabang, kasir: kasir, shift: shift, keranjang: Keranjang()..tambah(gula), metode: MetodeBayar.qris),
+          throwsA(anything), reason: 'tidak boleh berjualan di shift yang sudah ditutup');
+      expect(() => jual.tutupShiftBelumDihitung(shiftId: shift.id, oleh: kasir, modalTetap: 0), throwsStateError);
+
+      // Kasir berikutnya bisa langsung buka shift baru.
+      expect(jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 200000).id, isNot(shift.id));
+
+      expect(() => jual.hitungAmplop(shiftId: shift.id, amplopDihitung: 20000, oleh: kasir), throwsStateError, reason: 'kasir tidak boleh');
+      jam.maju(3600);
+      final h = jual.hitungAmplop(shiftId: shift.id, amplopDihitung: 20000, oleh: spv);
+      expect(h.selisih, -5000);
+      expect(h.amplopSeharusnya, 25000);
+      final tutup = db.satu('SELECT * FROM shift_tutup WHERE shift_id = ?', [shift.id])!;
+      expect(tutup['kas_dihitung'], 220000);
+      expect(tutup['selisih'], -5000);
+      expect(tutup['ditutup_oleh'], spv.id);
+      final hitung = jual.hitunganShift(shift.id).single;
+      expect(hitung.kasDihitung, 220000);
+      expect(db.satu("SELECT dihitung_oleh FROM shift_hitung WHERE shift_id = ?", [shift.id])!['dihitung_oleh'], spv.id);
+      final log = db.satu("SELECT detail, disetujui_oleh FROM log_aktivitas WHERE aksi = 'hitung_amplop_shift'")!;
+      expect(jsonDecode(log['detail']! as String)['kasir_id'], kasir.id);
+      expect(jual.shiftMenungguDihitung(cabang.id), isEmpty);
+      expect(() => jual.hitungAmplop(shiftId: shift.id, amplopDihitung: 25000, oleh: spv), throwsStateError, reason: 'hanya sekali');
+      // Ringkasan shift tetap memakai batas waktu saat kasir menutup.
+      expect(jual.ringkasanShift(shift.id).kasSistem, 225000);
+      for (final t in ['shift_belum_dihitung', 'shift_hitung', 'shift_tutup']) {
+        expect(db.satu('SELECT COUNT(*) AS n FROM outbox WHERE tabel = ?', [t])!['n'], 1, reason: t);
+      }
+    });
+
+    test('tanpa modal tetap semua uang masuk amplop; tidak bisa dipakai kalau uang sudah dihitung', () {
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 150000);
+      final m = jual.tutupShiftBelumDihitung(shiftId: shift.id, oleh: kasir, modalTetap: 0);
+      expect(m.modalDitinggal, 0);
+      expect(jual.hitungAmplop(shiftId: shift.id, amplopDihitung: 150000, oleh: admin).selisih, 0);
+
+      final s2 = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 100000);
+      jual.simpanHitungan(shiftId: s2.id, kasDihitung: 100000, oleh: kasir);
+      expect(() => jual.tutupShiftBelumDihitung(shiftId: s2.id, oleh: kasir, modalTetap: 0), throwsStateError);
+    });
+
+    test('modal tetap hanya diatur Admin', () {
+      final p = PengaturanRepo(db);
+      expect(p.modalTetap, 0);
+      expect(() => p.aturModalTetap(200000, cabangId: cabang.id, oleh: spv), throwsStateError);
+      expect(() => p.aturModalTetap(-1, cabangId: cabang.id, oleh: admin), throwsArgumentError);
+      p.aturModalTetap(200000, cabangId: cabang.id, oleh: admin);
+      expect(p.modalTetap, 200000);
+      expect(db.satu("SELECT COUNT(*) AS n FROM log_aktivitas WHERE aksi = 'atur_modal_tetap'")!['n'], 1);
+    });
+  });
+
+  group('riwayat transaksi (revisi D, E)', () {
+    test('transaksi shift hanya milik shift itu; detail berisi barang per baris', () {
+      final id = masukkanGula();
+      final gula = katalog.untukKasir(id, cabang.id)!;
+      final s1 = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: 0);
+      final s2 = jual.bukaShift(cabangId: cabang.id, kasirId: spv.id, modalAwal: 0);
+      final t1 = jual.simpan(cabang: cabang, kasir: kasir, shift: s1, keranjang: Keranjang()..tambah(gula, qty: 12), metode: MetodeBayar.tunai, uangDiterima: 300000);
+      jam.maju();
+      jual.simpan(cabang: cabang, kasir: spv, shift: s2, keranjang: Keranjang()..tambah(gula), metode: MetodeBayar.qris);
+      jam.maju();
+      final t3 = jual.simpan(cabang: cabang, kasir: kasir, shift: s1, keranjang: Keranjang()..tambah(gula), metode: MetodeBayar.qris);
+      jam.maju();
+      jual.batalkan(transaksiId: t3.transaksiId, alasan: 'salah input', dimintaOleh: kasir.id, disetujuiOleh: spv.id);
+
+      final daftar = jual.transaksiShift(s1.id);
+      expect(daftar.map((t) => t.noTransaksi), [t3.noTransaksi, t1.noTransaksi], reason: 'terbaru dulu, tanpa transaksi shift lain');
+      expect(daftar.first.dibatalkan, isTrue);
+      final r = jual.ringkasanShift(s1.id);
+      expect(r.jumlahTransaksi, 1, reason: 'yang dibatalkan tidak dihitung');
+      expect(r.penjualanTunai, 12 * 17000);
+
+      final d = jual.detailTransaksi(t1.transaksiId, cabang)!;
+      expect(d.item.single.qty, 12);
+      expect(d.item.single.hargaSatuan, 17000);
+      expect(d.item.single.isGrosir, isTrue);
+      expect(d.item.single.subtotal, 204000);
+      expect(d.item.single.barangId, id);
+      expect(d.status, 'Lunas');
+      expect(d.kasirId, kasir.id);
+      expect(d.struk.kembalian, 96000);
+      expect(jual.detailTransaksi(t3.transaksiId, cabang)!.status, 'Dibatalkan');
+      expect(jual.detailTransaksi('tidak-ada', cabang), isNull);
+    });
+  });
+
   group('ubah harga', () {
     test('naik: kasir boleh langsung; harga khusus toko', () {
       final id = masukkanGula();

@@ -15,14 +15,16 @@ import 'transaksi.dart';
 
 /// Layar kasir: fokus penjualan. Pembayaran muncul di atas layar ini.
 class HalamanKasir extends StatefulWidget {
-  const HalamanKasir({super.key, this.onKembaliKeMenu, this.onBukaBarangMasuk, this.onBukaUbahHarga, this.onBukaPengaturan});
+  const HalamanKasir({super.key, this.onKembaliKeMenu, this.onBukaBarangMasuk, this.onBukaUbahHarga, this.onBukaPengaturan, this.isiAwal});
 
-  /// Untuk SPV/Admin: kembali ke menu. null untuk kasir.
+  /// Kembali ke menu ikon (Kasir, SPV, Admin). Shift tetap aktif.
   final VoidCallback? onKembaliKeMenu;
   final VoidCallback? onBukaBarangMasuk;
   final VoidCallback? onBukaUbahHarga;
   final VoidCallback? onBukaPengaturan;
 
+  /// Barang dari transaksi yang dibatalkan lewat "Ubah transaksi" (dibuka dari menu), dimasukkan saat layar dibuka.
+  final IsiUlang? isiAwal;
   @override
   State<HalamanKasir> createState() => _HalamanKasirState();
 }
@@ -73,7 +75,11 @@ class _HalamanKasirState extends State<HalamanKasir> {
   Aplikasi get app => context.app;
 
   Future<void> _pastikanShift() async {
-    if (app.shiftAktif != null) return _pulihkan();
+    if (app.shiftAktif != null) {
+      await _pulihkan();
+      if (widget.isiAwal != null && mounted) _isiUlang(widget.isiAwal!);
+      return;
+    }
     final s = await bukaShiftDialog(context);
     if (!mounted) return;
     if (s == null) {
@@ -86,6 +92,34 @@ class _HalamanKasirState extends State<HalamanKasir> {
     }
     app.aturShift(s);
     await _pulihkan();
+    if (widget.isiAwal != null && mounted) _isiUlang(widget.isiAwal!);
+    _fokuskan();
+  }
+
+  /// "Ubah transaksi": barang transaksi yang baru dibatalkan dimasukkan ke daftar belanja (harga sekarang).
+  /// Belanjaan yang sedang di layar ditahan dulu supaya tidak hilang.
+  void _isiUlang(IsiUlang isi) {
+    var hilang = 0;
+    setState(() {
+      _tutupKartuSelesai();
+      if (!_keranjang.kosong) {
+        _ditahan.add(_keranjang.salin());
+        _keranjang.kosongkan();
+      }
+      for (final i in isi) {
+        final b = app.katalog.untukKasir(i.barangId, app.cabang.id);
+        if (b == null) {
+          hilang++;
+          continue;
+        }
+        _keranjang.tambah(b, qty: i.qty);
+      }
+      _barisDipilih = _keranjang.kosong ? null : _keranjang.barisTerakhir;
+    });
+    _simpanKeranjang();
+    if (hilang > 0) {
+      tampilkanPesan(context, '$hilang barang sudah tidak dijual di toko ini dan tidak dimasukkan.', galat: true);
+    }
     _fokuskan();
   }
 
@@ -440,7 +474,9 @@ class _HalamanKasirState extends State<HalamanKasir> {
   }
 
   Future<void> _transaksiTerakhir() async {
-    await showDialog<void>(context: context, builder: (_) => const DialogTransaksiTerakhir());
+    final isi = await showDialog<IsiUlang>(context: context, builder: (_) => const DialogTransaksiTerakhir());
+    if (!mounted) return;
+    if (isi != null) return _isiUlang(isi);
     _fokuskan();
   }
 
@@ -451,7 +487,8 @@ class _HalamanKasirState extends State<HalamanKasir> {
     }
     final selesai = await tutupShiftDialog(context);
     if (selesai == true && mounted) {
-      if (widget.onKembaliKeMenu != null) {
+      // Kasir: shift selesai = keluar. SPV/Admin: kembali ke menu.
+      if (widget.onKembaliKeMenu != null && app.penggunaAktif?.peran != Peran.kasir) {
         app.aturShift(null);
         widget.onKembaliKeMenu!();
       } else {

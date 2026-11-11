@@ -27,6 +27,9 @@ const namaAksi = {
   'tutup_shift': 'Tutup shift',
   'hitung_uang_shift': 'Hitung uang tutup shift',
   'hitung_ulang_shift': 'Hitung ulang uang shift',
+  'tutup_shift_belum_dihitung': 'Tutup shift (belum dihitung)',
+  'hitung_amplop_shift': 'Hitung amplop shift',
+  'atur_modal_tetap': 'Atur modal tetap',
   'kas_keluar': 'Kas keluar',
   'kas_masuk': 'Kas masuk',
   'ganti_alamat_server': 'Ganti alamat server',
@@ -41,7 +44,7 @@ const namaAksi = {
   'buat_kode_pendaftaran': 'Kode pendaftaran dibuat',
 };
 
-const _aksiPenting = {'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'login_gagal', 'koreksi_disetujui', 'stok_opname', 'retur', 'cabut_perangkat', 'hitung_ulang_shift', 'kas_keluar'};
+const _aksiPenting = {'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'login_gagal', 'koreksi_disetujui', 'stok_opname', 'retur', 'cabut_perangkat', 'hitung_ulang_shift', 'kas_keluar', 'tutup_shift_belum_dihitung', 'hitung_amplop_shift'};
 
 String _ringkas(String detail) {
   try {

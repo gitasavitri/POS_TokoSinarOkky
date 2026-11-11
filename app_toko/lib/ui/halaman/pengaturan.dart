@@ -132,6 +132,8 @@ class _IsiPengaturanState extends State<IsiPengaturan> {
         const SizedBox(height: 20),
         if (admin) _InfoToko(onSimpan: () => setState(() {})),
         if (admin) const SizedBox(height: 20),
+        if (admin) const _ModalTetap(),
+        if (admin) const SizedBox(height: 20),
         if (admin) const _KategoriSupplier(),
         if (admin) const SizedBox(height: 20),
         _KantorPusat(bolehAtur: admin),
@@ -215,6 +217,60 @@ class _FlashdiskCadanganState extends State<_FlashdiskCadangan> {
           child: const Text('Simpan'),
         ),
       ]);
+}
+
+/// Admin: modal tetap toko (revisi P). Dipakai saat shift ditutup "Belum dihitung" dan sebagai isian awal buka shift.
+class _ModalTetap extends StatefulWidget {
+  const _ModalTetap();
+  @override
+  State<_ModalTetap> createState() => _ModalTetapState();
+}
+
+class _ModalTetapState extends State<_ModalTetap> {
+  late final _c = TextEditingController(text: context.app.pengaturan.modalTetap == 0 ? '' : formatAngka(context.app.pengaturan.modalTetap));
+  late int _nilai = context.app.pengaturan.modalTetap;
+
+  void _simpan() {
+    final app = context.app;
+    try {
+      app.pengaturan.aturModalTetap(_nilai, cabangId: app.cabang.id, oleh: app.penggunaAktif!);
+      tampilkanPesan(context, _nilai == 0 ? 'Modal tetap dimatikan: semua uang masuk amplop.' : 'Modal tetap ${formatRupiah(_nilai)} tersimpan.');
+    } catch (e) {
+      tampilkanPesan(context, pesanGalat(e), galat: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Panel(
+        judul: 'Modal tetap kasir (Admin)',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text(
+            'Uang modal yang selalu tetap di kasir. Kalau shift ditutup "Belum dihitung", uang sebesar ini ditinggal di kasir '
+            'untuk shift berikutnya dan sisanya dimasukkan ke amplop. Juga jadi isian awal saat buka shift. Kosongkan kalau tidak dipakai.',
+            style: TextStyle(fontSize: 15.5, color: Warna.teksPudar, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: InputRupiah(
+                key: const ValueKey('modal-tetap'),
+                controller: _c,
+                label: 'Modal tetap',
+                onChanged: (n) => _nilai = n,
+                onSubmitted: (_) => _simpan(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(onPressed: _simpan, child: const Text('Simpan')),
+          ]),
+        ]),
+      );
 }
 
 class _Baris extends StatelessWidget {

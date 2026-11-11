@@ -30,6 +30,18 @@ enum Izin {
   lihatLaporan,
   aturPrinter,
   kelolaKaryawan,
+
+  /// Cek stok & harga barang toko ini (revisi C). Hanya melihat; stok opname tetap [stokOpname].
+  lihatStok,
+
+  /// Melihat harga beli / HPP. Disembunyikan dari kasir (revisi C, D).
+  lihatHpp,
+
+  /// Mengisi hasil hitungan amplop shift yang ditutup "Belum dihitung" (revisi P).
+  hitungShiftMenunggu,
+
+  /// Mengatur modal tetap toko (uang yang tetap di kasir saat shift ditutup "Belum dihitung", revisi P).
+  aturModalTetap,
 }
 
 enum Akses {
@@ -48,13 +60,14 @@ Akses aksesUntuk(Peran peran, Izin izin) {
     case Peran.admin:
       return Akses.ya;
     case Peran.spv:
-      return izin == Izin.kelolaKaryawan ? Akses.tidak : Akses.ya;
+      return izin == Izin.kelolaKaryawan || izin == Izin.aturModalTetap ? Akses.tidak : Akses.ya;
     case Peran.kasir:
       switch (izin) {
         case Izin.jual:
         case Izin.catatBarangMasuk:
         case Izin.ubahHargaNaik:
         case Izin.mintaKoreksiBarangMasuk:
+        case Izin.lihatStok:
           return Akses.ya;
         case Izin.batalTransaksi:
         case Izin.ubahHargaTurunBesar:
@@ -65,6 +78,9 @@ Akses aksesUntuk(Peran peran, Izin izin) {
         case Izin.lihatLaporan:
         case Izin.aturPrinter:
         case Izin.kelolaKaryawan:
+        case Izin.lihatHpp:
+        case Izin.hitungShiftMenunggu:
+        case Izin.aturModalTetap:
           return Akses.tidak;
       }
   }

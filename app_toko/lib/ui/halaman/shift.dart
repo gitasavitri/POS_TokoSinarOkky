@@ -30,8 +30,15 @@ class _DialogBukaShift extends StatefulWidget {
 }
 
 class _DialogBukaShiftState extends State<_DialogBukaShift> {
-  final _modal = TextEditingController();
-  int _nilai = 0;
+  // Modal tetap toko (revisi P) jadi isian awal; kasir tetap menghitung dan boleh mengubahnya.
+  late int _nilai = context.app.pengaturan.modalTetap;
+  late final _modal = TextEditingController(text: _nilai == 0 ? '' : formatAngka(_nilai));
+
+  @override
+  void dispose() {
+    _modal.dispose();
+    super.dispose();
+  }
 
   void _buka() {
     final app = context.app;
@@ -199,6 +206,42 @@ class _DialogTutupShiftState extends State<DialogTutupShift> {
     Navigator.pop(context, true);
   }
 
+  /// Revisi P: tidak sempat menghitung uang saat ganti shift. Uang (kecuali modal tetap) masuk amplop berlabel,
+  /// shift menunggu dihitung SPV/Admin. Kasir tetap tidak melihat uang seharusnya.
+  Future<void> _belumDihitung() async {
+    if (_sibuk) return;
+    final app = context.app;
+    final p = app.penggunaAktif!;
+    final modalTetap = app.pengaturan.modalTetap;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DialogPetunjukAmplop(namaKasir: p.nama, modalTetap: modalTetap),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _sibuk = true);
+    final ShiftMenunggu m;
+    try {
+      m = app.penjualan.tutupShiftBelumDihitung(shiftId: _shiftId, oleh: p, modalTetap: modalTetap);
+    } catch (e) {
+      setState(() {
+        _sibuk = false;
+        _galat = pesanGalat(e);
+      });
+      return;
+    }
+    String pesan = 'Shift ditutup, menunggu dihitung SPV/Admin.';
+    try {
+      app.cadangkan();
+    } catch (e) {
+      pesan += ' Cadangan otomatis gagal: ${pesanGalat(e)}';
+    }
+    final g = await app.kirimKePrinter(cetakBaris(barisLabelAmplop(app.cabang.namaToko, m, modalTetap), potongKertas: app.potongKertas));
+    if (g != null) pesan += ' Label amplop belum tercetak ($g): tulis label di amplop dengan tangan.';
+    if (!mounted) return;
+    tampilkanPesan(context, pesan, galat: g != null);
+    Navigator.pop(context, true);
+  }
+
   Widget _baris(String a, String b, {bool tebal = false, Color? warna}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(children: [
@@ -209,7 +252,9 @@ class _DialogTutupShiftState extends State<DialogTutupShift> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.app.penggunaAktif!;
+    // Setelah shift ditutup pengguna langsung keluar; dialog masih dibangun ulang selama animasi menutup.
+    final p = context.app.penggunaAktif;
+    if (p == null) return const SizedBox.shrink();
     final h = _terakhir;
     final kasir = p.peran == Peran.kasir;
     final sisa = sisaHitungUlang(_berlaku);
@@ -242,6 +287,13 @@ class _DialogTutupShiftState extends State<DialogTutupShift> {
       ];
       tombol = [
         OutlinedButton(onPressed: _sibuk ? null : () => Navigator.pop(context, false), child: const Text('Batal')),
+        if (_berlaku == 0)
+          OutlinedButton.icon(
+            key: const ValueKey('belum-dihitung'),
+            onPressed: _sibuk ? null : _belumDihitung,
+            icon: const Icon(Icons.mail_outline),
+            label: const Text('Belum dihitung'),
+          ),
         if (h != null) OutlinedButton(onPressed: _sibuk ? null : () => setState(() => _mengisi = false), child: const Text('Kembali ke hasil')),
         FilledButton(
           key: const ValueKey('simpan-hitungan'),
@@ -303,6 +355,244 @@ class _DialogTutupShiftState extends State<DialogTutupShift> {
         ]),
       ),
       actions: tombol,
+    );
+  }
+}
+
+// ============================================================================ "Belum dihitung" (revisi P)
+
+/// Isi struk label amplop. Sengaja tanpa "uang seharusnya" (hitung buta).
+List<BarisStruk> barisLabelAmplop(String namaToko, ShiftMenunggu m, int modalTetap) => [
+      BarisStruk(namaToko, rata: Rata.tengah, tebal: true),
+      BarisStruk('AMPLOP SHIFT', rata: Rata.tengah, tebal: true, besar: true),
+      BarisStruk('BELUM DIHITUNG', rata: Rata.tengah, tebal: true),
+      BarisStruk(garis()),
+      BarisStruk(kiriKanan('Kasir', m.namaKasir), tebal: true),
+      BarisStruk(kiriKanan('Dibuka', formatStruk(m.dibukaPada))),
+      BarisStruk(kiriKanan('Ditutup', formatStruk(m.ditutupPada))),
+      BarisStruk(kiriKanan('Transaksi', '${m.jumlahTransaksi}')),
+      BarisStruk(kiriKanan('Modal di kasir', modalTetap == 0 ? '-' : formatAngka(modalTetap))),
+      BarisStruk(garis()),
+      const BarisStruk('Diisi SPV/Admin:'),
+      const BarisStruk('Isi amplop  : ................'),
+      const BarisStruk('Dihitung    : ................'),
+      const BarisStruk('Tanggal     : ................'),
+    ];
+
+class _DialogPetunjukAmplop extends StatelessWidget {
+  const _DialogPetunjukAmplop({required this.namaKasir, required this.modalTetap});
+  final String namaKasir;
+  final int modalTetap;
+
+  Widget _langkah(int no, String teks) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Warna.utamaMuda, borderRadius: BorderRadius.circular(15)),
+            child: Text('$no', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Warna.utamaTua)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(teks, style: const TextStyle(fontSize: 17, height: 1.4))),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Tutup shift: belum dihitung', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: SizedBox(
+          width: 560,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('Pakai ini kalau tidak sempat menghitung uang saat ganti shift.', style: TextStyle(fontSize: 16, color: Warna.teksPudar)),
+            const SizedBox(height: 10),
+            if (modalTetap > 0)
+              _langkah(1, 'Sisakan uang modal ${formatRupiah(modalTetap)} di kasir untuk shift berikutnya '
+                  '(kalau uangnya kurang dari itu, sisakan semua).')
+            else
+              _langkah(1, 'Ambil semua uang tunai dari kasir.'),
+            _langkah(2, modalTetap > 0 ? 'Masukkan semua sisa uang tunai ke amplop.' : 'Masukkan semua uang tunai ke amplop.'),
+            _langkah(3, 'Label amplop dicetak di printer struk. Tempel di amplop (atau tulis: nama $namaKasir, tanggal & jam).'),
+            _langkah(4, 'Serahkan amplop ke SPV/Admin. Mereka yang menghitung, dan selisihnya tercatat atas nama $namaKasir.'),
+            const SizedBox(height: 10),
+            const KotakPesan('Setelah ini shift tidak bisa dipakai berjualan lagi.', jenis: JenisPesan.perhatian),
+          ]),
+        ),
+        actions: [
+          OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          FilledButton.icon(
+            key: const ValueKey('konfirmasi-belum-dihitung'),
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.mail_outline),
+            label: const Text('Tutup shift & cetak label'),
+          ),
+        ],
+      );
+}
+
+/// SPV/Admin: daftar shift yang ditutup "Belum dihitung", klik untuk mengisi hasil hitungan amplop.
+class IsiShiftMenunggu extends StatefulWidget {
+  const IsiShiftMenunggu({super.key});
+  @override
+  State<IsiShiftMenunggu> createState() => _IsiShiftMenungguState();
+}
+
+class _IsiShiftMenungguState extends State<IsiShiftMenunggu> {
+  late List<ShiftMenunggu> _daftar;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  void _muat() => setState(() => _daftar = context.app.penjualan.shiftMenungguDihitung(context.app.cabang.id));
+
+  Future<void> _hitung(ShiftMenunggu m) async {
+    await showDialog<void>(context: context, barrierDismissible: false, builder: (_) => DialogHitungAmplop(shift: m));
+    if (!mounted) return;
+    _muat();
+    context.app.segarkan();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(24), children: [
+        const KotakPesan(
+          'Shift yang ditutup kasir tanpa menghitung uang. Hitung isi amplopnya, lalu klik shift untuk mengisi hasilnya. '
+          'Selisih tercatat atas nama kasir shift itu.',
+          jenis: JenisPesan.info,
+        ),
+        const SizedBox(height: 16),
+        Panel(
+          judul: 'Menunggu dihitung (${_daftar.length})',
+          warnaKepala: _daftar.isEmpty ? null : Warna.oranyeMuda,
+          padding: EdgeInsets.zero,
+          child: _daftar.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Tidak ada shift yang menunggu dihitung.', style: TextStyle(fontSize: 17, color: Warna.teksPudar)),
+                )
+              : TabelSederhana(
+                  kolom: const ['Kasir', 'Dibuka', 'Ditutup', 'Transaksi', 'Modal di kasir'],
+                  lebar: const [3, 4, 4, 2, 3],
+                  rataKanan: const {3, 4},
+                  onTap: (i) => _hitung(_daftar[i]),
+                  baris: [
+                    for (final m in _daftar)
+                      [
+                        Text(m.namaKasir, style: gayaSelTebal),
+                        Text(formatLayar(m.dibukaPada), style: gayaSel),
+                        Text(formatLayar(m.ditutupPada), style: gayaSel),
+                        Text('${m.jumlahTransaksi}', style: gayaSel),
+                        Text(formatRupiah(m.modalDitinggal), style: gayaSel),
+                      ],
+                  ],
+                ),
+        ),
+      ]);
+}
+
+/// SPV/Admin mengisi hasil hitungan amplop. Uang seharusnya dan selisih baru tampil setelah disimpan.
+class DialogHitungAmplop extends StatefulWidget {
+  const DialogHitungAmplop({super.key, required this.shift});
+  final ShiftMenunggu shift;
+  @override
+  State<DialogHitungAmplop> createState() => _DialogHitungAmplopState();
+}
+
+class _DialogHitungAmplopState extends State<DialogHitungAmplop> {
+  final _c = TextEditingController();
+  int? _nilai;
+  HasilHitungAmplop? _hasil;
+  bool _sibuk = false;
+  String? _galat;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    if (_nilai == null || _sibuk) return;
+    final m = widget.shift;
+    final ok = await konfirmasi(context,
+        judul: 'Simpan hasil hitungan?',
+        isi: 'Isi amplop ${m.namaKasir}: ${formatRupiah(_nilai!)}. Hasil ini tidak bisa diubah lagi.',
+        ya: 'Simpan');
+    if (!ok || !mounted) return;
+    setState(() => _sibuk = true);
+    try {
+      final app = context.app;
+      final h = app.penjualan.hitungAmplop(shiftId: m.shiftId, amplopDihitung: _nilai!, oleh: app.penggunaAktif!);
+      setState(() {
+        _hasil = h;
+        _galat = null;
+      });
+    } catch (e) {
+      setState(() => _galat = pesanGalat(e));
+    } finally {
+      if (mounted) setState(() => _sibuk = false);
+    }
+  }
+
+  Widget _baris(String a, String b, {bool tebal = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Expanded(child: Text(a, style: TextStyle(fontSize: 17, fontWeight: tebal ? FontWeight.w800 : FontWeight.w500))),
+          Text(b, style: TextStyle(fontSize: 17, fontWeight: tebal ? FontWeight.w800 : FontWeight.w600)),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.shift;
+    final h = _hasil;
+    return AlertDialog(
+      title: Text('Hitung amplop: ${m.namaKasir}', style: const TextStyle(fontWeight: FontWeight.w800)),
+      content: SizedBox(
+        width: 540,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _baris('Shift', '${formatLayar(m.dibukaPada)} – ${formatJam(m.ditutupPada)}'),
+          _baris('Jumlah transaksi', '${m.jumlahTransaksi}'),
+          _baris('Modal ditinggal di kasir', formatRupiah(m.modalDitinggal)),
+          const Divider(height: 22),
+          if (h == null) ...[
+            InputRupiah(
+              key: const ValueKey('isi-amplop'),
+              controller: _c,
+              autofocus: true,
+              besar: true,
+              label: 'Uang di dalam amplop',
+              onChanged: (n) => setState(() => _nilai = _c.text.isEmpty ? null : n),
+              onSubmitted: (_) => _simpan(),
+            ),
+          ] else ...[
+            _baris('Isi amplop dihitung', formatRupiah(h.amplopDihitung), tebal: true),
+            _baris('Isi amplop seharusnya', formatRupiah(h.amplopSeharusnya)),
+            const SizedBox(height: 10),
+            KotakPesan(
+              key: const ValueKey('hasil-amplop'),
+              h.selisih == 0
+                  ? 'Uang pas, tidak ada selisih.'
+                  : '${h.selisih < 0 ? 'Uang KURANG' : 'Uang LEBIH'} ${formatRupiah(h.selisih.abs())}. Tercatat atas nama ${m.namaKasir}.',
+              jenis: h.selisih == 0 ? JenisPesan.berhasil : JenisPesan.perhatian,
+            ),
+          ],
+          if (_galat != null) ...[const SizedBox(height: 12), KotakPesan(_galat!, jenis: JenisPesan.galat)],
+        ]),
+      ),
+      actions: h == null
+          ? [
+              OutlinedButton(onPressed: _sibuk ? null : () => Navigator.pop(context), child: const Text('Batal')),
+              FilledButton(
+                key: const ValueKey('simpan-amplop'),
+                onPressed: _nilai == null || _sibuk ? null : _simpan,
+                child: Text(_sibuk ? 'Menyimpan…' : 'Simpan hasil hitungan'),
+              ),
+            ]
+          : [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Selesai'))],
     );
   }
 }

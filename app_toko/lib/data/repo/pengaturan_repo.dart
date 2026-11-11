@@ -1,3 +1,5 @@
+import 'package:pos_core/pos_core.dart';
+
 import '../database.dart';
 import '../model.dart';
 
@@ -19,6 +21,10 @@ class PengaturanRepo {
   static const kSinkronTerakhir = 'sinkron_terakhir';
   static const kFolderCadangan2 = 'folder_cadangan_kedua';
   static const kCadanganTerakhir = 'cadangan_terakhir';
+
+  /// Modal tetap toko (revisi P): uang yang tetap di kasir saat shift ditutup "Belum dihitung"
+  /// dan isian awal modal saat buka shift. 0 = tidak dipakai.
+  static const kModalTetap = 'modal_tetap';
 
   String? ambil(String kunci) =>
       _db.satu('SELECT nilai FROM pengaturan_perangkat WHERE kunci = ?', [kunci])?['nilai'] as String?;
@@ -43,6 +49,19 @@ class PengaturanRepo {
   void simpanBool(String kunci, bool nilai) => simpan(kunci, nilai ? '1' : '0');
 
   int ambilInt(String kunci, {int bawaan = 0}) => int.tryParse(ambil(kunci) ?? '') ?? bawaan;
+
+  int get modalTetap => ambilInt(kModalTetap);
+
+  /// Admin mengatur modal tetap toko. Tercatat di log.
+  void aturModalTetap(int nilai, {required String cabangId, required Pengguna oleh}) {
+    if (aksesUntuk(oleh.peran, Izin.aturModalTetap) != Akses.ya) throw StateError('Modal tetap hanya bisa diatur Admin.');
+    if (nilai < 0) throw ArgumentError('Modal tetap tidak boleh minus');
+    _db.transaksi(() {
+      final lama = modalTetap;
+      simpan(kModalTetap, '$nilai');
+      _db.log(cabangId: cabangId, penggunaId: oleh.id, aksi: 'atur_modal_tetap', detail: {'lama': lama, 'baru': nilai});
+    });
+  }
 
   bool get sudahDisiapkan => ambil(kCabangId) != null;
 

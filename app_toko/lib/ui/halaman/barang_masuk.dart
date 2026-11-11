@@ -187,7 +187,7 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
             ),
           ),
           const SizedBox(width: 16),
-          SizedBox(height: 56, child: OutlinedButton.icon(onPressed: () => _riwayat(context), icon: const Icon(Icons.history), label: const Text('Riwayat & minta koreksi'))),
+          SizedBox(height: 56, child: OutlinedButton.icon(onPressed: () => bukaRiwayatBarangMasuk(context), icon: const Icon(Icons.history), label: const Text('Riwayat & minta koreksi'))),
         ]),
       ),
       Expanded(
@@ -803,7 +803,9 @@ Widget _sel(Widget w) => Padding(padding: const EdgeInsets.symmetric(horizontal:
 
 // ============================================================================ riwayat & minta koreksi
 
-Future<void> _riwayat(BuildContext context) => showDialog<void>(context: context, builder: (_) => const _DialogRiwayat());
+/// Riwayat barang masuk + tombol "Minta koreksi" (dibuka dari Barang masuk dan menu Kasir).
+
+Future<void> bukaRiwayatBarangMasuk(BuildContext context) => showDialog<void>(context: context, builder: (_) => const _DialogRiwayat());
 
 class _DialogRiwayat extends StatefulWidget {
   const _DialogRiwayat();
