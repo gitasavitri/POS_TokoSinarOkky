@@ -46,6 +46,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
 
   /// Enter ditekan tapi barcode/nama tidak ditemukan.
   bool _tidakKetemu = false;
+
+  /// Waktu Enter pertama di kolom Barcode yang kosong. Enter kedua (dalam [_jedaEnterBayar]) membuka layar Bayar.
+  DateTime? _enterKosong;
+  static const _jedaEnterBayar = Duration(milliseconds: 1500);
   DateTime _sekarang = DateTime.now();
 
   @override
@@ -165,8 +169,18 @@ class _HalamanKasirState extends State<HalamanKasir> {
     _scan.selection = TextSelection(baseOffset: 0, extentOffset: _scan.text.length);
   }
 
+  /// Esc saat kartu kembalian tampil: tutup kartunya (pembeli mau cek harga, dll.).
+  /// Kalau kartu tidak tampil, Esc diteruskan (SPV/Admin: kembali ke menu).
+  bool _escTutupKartu(KeyEvent e) {
+    if (!_ditekan(e, LogicalKeyboardKey.escape) || _selesai == null) return false;
+    setState(_tutupKartuSelesai);
+    _fokuskan();
+    return true;
+  }
+
   /// ↓ di kolom Barcode pindah ke Jumlah.
   KeyEventResult _tombolScan(FocusNode _, KeyEvent e) {
+    if (_escTutupKartu(e)) return KeyEventResult.handled;
     if (_ditekan(e, LogicalKeyboardKey.arrowDown)) {
       _keJumlah();
       return KeyEventResult.handled;
@@ -176,6 +190,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
 
   /// ↑ di kolom Jumlah kembali ke Barcode.
   KeyEventResult _tombolQty(FocusNode _, KeyEvent e) {
+    if (_escTutupKartu(e)) return KeyEventResult.handled;
     if (_ditekan(e, LogicalKeyboardKey.arrowUp)) {
       _keBarcode();
       return KeyEventResult.handled;
@@ -198,6 +213,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
     final isi = teks.trim();
     setState(() {
       _tidakKetemu = false;
+      _enterKosong = null;
       _pilih = isi.isEmpty ? null : app.katalog.untukKasirBarcode(isi, app.cabang.id);
     });
   }
@@ -218,7 +234,8 @@ class _HalamanKasirState extends State<HalamanKasir> {
   /// Enter di kolom Barcode.
   Future<void> _prosesScan() async {
     final isi = _scan.text.trim();
-    if (isi.isEmpty) return;
+    if (isi.isEmpty) return _enterDiKolomKosong();
+    _enterKosong = null;
     final b = app.katalog.untukKasirBarcode(isi, app.cabang.id);
     if (b != null) return _pilihBarang(b);
     final hasil = app.katalog.cari(isi, app.cabang.id, batas: 30).where((d) => d.untukDijual != null).toList();
@@ -232,6 +249,29 @@ class _HalamanKasirState extends State<HalamanKasir> {
       return;
     }
     await _cari(awal: isi);
+  }
+
+  /// Enter di kolom Barcode yang kosong. Enter 2× berturut-turut = buka layar Bayar
+  /// (hanya kalau daftar belanja tidak kosong). Scanner selalu mengirim barcode sebelum Enter,
+  /// jadi scan tidak pernah memicu ini.
+  void _enterDiKolomKosong() {
+    final sekarang = DateTime.now();
+    final pertama = _enterKosong;
+    if (_keranjang.kosong) {
+      setState(() => _enterKosong = null);
+      return _fokuskan();
+    }
+    if (pertama != null && sekarang.difference(pertama) <= _jedaEnterBayar) {
+      setState(() => _enterKosong = null);
+      _bayar();
+      return;
+    }
+    setState(() => _enterKosong = sekarang);
+    _fokuskan();
+    // Petunjuk "Enter sekali lagi" hilang sendiri kalau Enter kedua tidak datang.
+    Timer(_jedaEnterBayar, () {
+      if (mounted && _enterKosong == sekarang) setState(() => _enterKosong = null);
+    });
   }
 
   Future<void> _cari({String awal = ''}) async {
@@ -280,6 +320,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
       _barisDipilih = _keranjang.barisTerakhir;
       _pilih = null;
       _tidakKetemu = false;
+      _enterKosong = null;
       _qty.text = '1';
       _scan.clear();
     });
@@ -350,6 +391,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
   }
 
   Future<void> _bayar() async {
+    _enterKosong = null;
     if (_keranjang.kosong) return;
     final shift = app.shiftAktif;
     if (shift == null) return _pastikanShift();
@@ -496,6 +538,20 @@ class _HalamanKasirState extends State<HalamanKasir> {
           style: TextStyle(fontSize: 16, color: Warna.merah),
         ),
       );
+    } else if (_enterKosong != null && teks.isEmpty) {
+      nama = _kotakBaca(
+        key: const ValueKey('nama-barang'),
+        latar: Warna.suksesMuda,
+        garis: const Color(0xFF8FD3AC),
+        isi: const Row(children: [
+          Icon(Icons.payments, size: 20, color: Warna.suksesTua),
+          SizedBox(width: 8),
+          Flexible(
+            child: Text('Tekan Enter sekali lagi untuk BAYAR',
+                overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Warna.suksesTua)),
+          ),
+        ]),
+      );
     } else {
       nama = _kotakBaca(
         key: const ValueKey('nama-barang'),
@@ -530,6 +586,8 @@ class _HalamanKasirState extends State<HalamanKasir> {
               style: const TextStyle(fontFamily: fontMono, fontSize: 17, fontWeight: FontWeight.w700),
               decoration: _hiasIsian(petunjuk: 'Scan atau ketik barcode / nama barang'),
               onChanged: _barcodeBerubah,
+              // Fokus tetap di kolom ini setelah Enter (diatur sendiri oleh _prosesScan).
+              onEditingComplete: () {},
               onSubmitted: (_) => _prosesScan(),
             ),
           ),
@@ -549,6 +607,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                   style: _gayaIsian.copyWith(fontWeight: FontWeight.w800),
                   decoration: _hiasIsian(),
                   onChanged: (_) => setState(() {}),
+                  onEditingComplete: () {},
                   onSubmitted: (_) => _masukkan(),
                 ),
               ),
@@ -660,14 +719,20 @@ class _HalamanKasirState extends State<HalamanKasir> {
                         border: Border.all(color: Warna.garis, width: 1.5),
                       ),
                       alignment: Alignment.center,
-                      padding: const EdgeInsets.all(16),
-                      child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(10),
+                      // Kartu dikecilkan kalau tinggi layar tidak cukup, supaya tombol Tutup tidak terpotong.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
                         child: KartuKembalian(
                           key: const ValueKey('kartu-kembalian'),
                           hasil: _selesai!.hasil,
                           mencetak: _selesai!.mencetak,
                           galatCetak: _selesai!.galatCetak,
                           onCetak: _cetakUlangSelesai,
+                          onTutup: () {
+                            setState(_tutupKartuSelesai);
+                            _fokuskan();
+                          },
                         ),
                       ),
                     )
@@ -731,7 +796,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
             child: SizedBox(
-              height: 196,
+              height: 214,
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(flex: 9, child: _kotakInput()),
                 const SizedBox(width: 14),
@@ -804,6 +869,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                 child: Wrap(spacing: 14, runSpacing: 4, children: [
                   _Pintasan('F2', 'Cari'),
                   _Pintasan('↓ ↑', 'Pindah kolom'),
+                  _Pintasan('Enter 2×', 'Bayar'),
                   _Pintasan('F9', 'Terakhir'),
                   _Pintasan('Del', 'Hapus baris'),
                 ]),
@@ -1264,7 +1330,7 @@ class _KotakBesar extends StatelessWidget {
             Container(width: 8, color: aksen),
             Expanded(
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: besar ? 16 : 12),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: besar ? 8 : 12),
                 child: Column(crossAxisAlignment: besar ? CrossAxisAlignment.center : CrossAxisAlignment.start, children: [
                   Row(mainAxisAlignment: besar ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
                     Text(label, style: TextStyle(fontSize: besar ? 20 : 15, fontWeight: FontWeight.w800, letterSpacing: besar ? 2 : 0.6, color: warna)),
@@ -1280,7 +1346,7 @@ class _KotakBesar extends StatelessWidget {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: besar ? Alignment.center : Alignment.centerLeft,
-                    child: Text(nilai, style: TextStyle(fontSize: besar ? 84 : 48, fontWeight: FontWeight.w800, color: warna, height: 1.15)),
+                    child: Text(nilai, style: TextStyle(fontSize: besar ? 72 : 48, fontWeight: FontWeight.w800, color: warna, height: 1.1)),
                   ),
                 ]),
               ),
@@ -1305,11 +1371,14 @@ class _KotakTeks extends StatelessWidget {
 /// Setelah bayar: kartu kembalian besar di tengah layar kasir. Tetap tampil sampai barang berikutnya
 /// di-scan, supaya kasir masih bisa melihat kembalian sambil mengambil struk. Kembalian 0 tetap ditampilkan.
 class KartuKembalian extends StatelessWidget {
-  const KartuKembalian({super.key, required this.hasil, this.mencetak = false, this.galatCetak, this.onCetak});
+  const KartuKembalian({super.key, required this.hasil, this.mencetak = false, this.galatCetak, this.onCetak, this.onTutup});
   final HasilSimpanTransaksi hasil;
   final bool mencetak;
   final String? galatCetak;
   final VoidCallback? onCetak;
+
+  /// Tombol Tutup (Esc). Kartu juga tertutup sendiri saat barang berikutnya di-scan.
+  final VoidCallback? onTutup;
 
   @override
   Widget build(BuildContext context) {
@@ -1340,7 +1409,7 @@ class KartuKembalian extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Container(
               decoration: const BoxDecoration(gradient: LinearGradient(colors: [Warna.suksesTua, Warna.sukses])),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Row(children: [
                 const Icon(Icons.check_circle, color: Colors.white, size: 30),
                 const SizedBox(width: 12),
@@ -1350,7 +1419,7 @@ class KartuKembalian extends StatelessWidget {
               ]),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 if (tunai)
                   _KotakBesar(
@@ -1384,14 +1453,14 @@ class KartuKembalian extends StatelessWidget {
                       icon: const Icon(Icons.print),
                       label: Text(galatCetak == null && otomatis ? 'Cetak lagi' : 'Cetak struk'),
                     ),
-                  if (galatCetak == null) ...[
-                    const Spacer(),
-                    const Flexible(
-                      flex: 3,
-                      child: Text('Tetap tampil sampai barang berikutnya di-scan',
-                          textAlign: TextAlign.right, style: TextStyle(fontSize: 15.5, color: Warna.teksPudar)),
+                  if (galatCetak == null) const Spacer() else const SizedBox(width: 12),
+                  if (onTutup != null)
+                    OutlinedButton.icon(
+                      key: const ValueKey('tutup-kembalian'),
+                      onPressed: onTutup,
+                      icon: const Icon(Icons.close),
+                      label: const Text('Tutup (Esc)'),
                     ),
-                  ],
                 ]),
               ]),
             ),

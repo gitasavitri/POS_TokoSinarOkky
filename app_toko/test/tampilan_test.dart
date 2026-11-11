@@ -88,6 +88,15 @@ Future<void> _pasang(WidgetTester t, Aplikasi app) async {
   await t.pump(const Duration(milliseconds: 300));
 }
 
+/// Scan barcode lalu Enter di Jumlah (jumlah 1) → barang masuk daftar belanja.
+Future<void> _scanMasuk(WidgetTester t, String barcode) async {
+  await t.enterText(find.byKey(const ValueKey('scan')), barcode);
+  await t.testTextInput.receiveAction(TextInputAction.done);
+  await t.pump(const Duration(milliseconds: 100));
+  await t.testTextInput.receiveAction(TextInputAction.done);
+  await t.pump(const Duration(milliseconds: 100));
+}
+
 Future<void> _foto(WidgetTester t, String nama) async {
   expect(t.takeException(), isNull, reason: 'galat tampilan di $nama');
   if (_gambar) await expectLater(find.byKey(const ValueKey('layar')), matchesGoldenFile('gambar/$nama.png'));
@@ -118,9 +127,7 @@ void main() {
     s!.app.masuk(s.kasir);
     await _pasang(t, s.app);
     for (final bc in ['8990001', '8990003', '8990001']) {
-      await t.enterText(find.byKey(const ValueKey('scan')), bc);
-      await t.testTextInput.receiveAction(TextInputAction.done);
-      await t.pump(const Duration(milliseconds: 100));
+      await _scanMasuk(t, bc);
     }
     await _foto(t, '10-kasir');
     expect(find.text('TRX-A01-${kodeTanggal(DateTime.now())}-0003'), findsOneWidget);
@@ -150,7 +157,7 @@ void main() {
     s.app.keluar();
   });
 
-  testWidgets('kasir: panah → ke Jumlah, ↑/↓ ubah jumlah, ← dan Enter kembali ke scan', (t) async {
+  testWidgets('kasir: scan berhenti di Jumlah, ↓/↑ pindah kolom, Enter masuk daftar', (t) async {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.kasir);
     await _pasang(t, s.app);
@@ -159,33 +166,76 @@ void main() {
     bool fokus(String kunci) => ketik(kunci).focusNode.hasFocus;
 
     expect(fokus('scan'), isTrue);
-    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await t.pump();
-    expect(fokus('jumlah'), isTrue, reason: '→ dari kolom scan pindah ke Jumlah');
-    expect(ketik('jumlah').controller.selection.textInside('1'), '1', reason: 'angka terpilih supaya bisa langsung diketik');
-
-    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await t.pump();
-    expect(ketik('jumlah').controller.text, '2');
-
-    await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    expect(fokus('jumlah'), isTrue, reason: '↓ dari Barcode pindah ke Jumlah');
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await t.pump();
-    expect(fokus('scan'), isTrue, reason: '← dari Jumlah kembali ke scan');
+    expect(fokus('scan'), isTrue, reason: '↑ dari Jumlah kembali ke Barcode');
+
+    // Scan → nama muncul, kursor di Jumlah, belum masuk daftar.
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(fokus('jumlah'), isTrue, reason: 'setelah scan berhenti di Jumlah');
+    expect(find.text('Sabun Mandi 85 g'), findsOneWidget, reason: 'nama tampil di kotak input');
+    expect(find.text('Jenis barang: '), findsNothing, reason: 'daftar belanja masih kosong');
+
+    await t.enterText(find.byKey(const ValueKey('jumlah')), '2');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(fokus('scan'), isTrue, reason: 'Enter di Jumlah → masuk daftar, kembali ke Barcode');
+    expect(find.text(formatRupiah(8000)), findsWidgets, reason: 'Sabun 2 × Rp4.000');
+    await _foto(t, '10b-kasir-input');
+    s.app.keluar();
+  });
+
+  testWidgets('kasir: Enter 2× di Barcode kosong membuka Bayar; Esc menutup kartu kembalian', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+
+    // Daftar belanja kosong: Enter 2× tidak membuka Bayar.
+    for (var i = 0; i < 2; i++) {
+      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.pump();
+    }
+    expect(find.byType(DialogBayar), findsNothing);
 
     await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
     await t.testTextInput.receiveAction(TextInputAction.done);
     await t.pump(const Duration(milliseconds: 100));
-    expect(find.text(formatRupiah(8000)), findsWidgets, reason: 'Sabun 2 × Rp4.000');
+    await t.testTextInput.receiveAction(TextInputAction.done); // Enter di Jumlah → masuk daftar
+    await t.pump(const Duration(milliseconds: 100));
 
-    // Ketik jumlah lalu Enter → kembali ke scan.
-    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.testTextInput.receiveAction(TextInputAction.done); // Enter ke-1 (kolom kosong)
     await t.pump();
-    await t.enterText(find.byKey(const ValueKey('jumlah')), '5');
+    expect(find.byType(DialogBayar), findsNothing);
+    expect(find.text('Tekan Enter sekali lagi untuk BAYAR'), findsOneWidget);
+    await _foto(t, '10c-kasir-enter-sekali-lagi');
+    await t.testTextInput.receiveAction(TextInputAction.done); // Enter ke-2
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(DialogBayar), findsOneWidget, reason: 'Enter 2× membuka layar Bayar');
+
+    await t.enterText(find.descendant(of: find.byType(DialogBayar), matching: find.byType(TextField)), '5000');
     await t.testTextInput.receiveAction(TextInputAction.done);
-    await t.pump();
-    expect(fokus('scan'), isTrue);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('Transaksi selesai'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tutup-kembalian')), findsOneWidget);
+
+    await t.sendKeyEvent(LogicalKeyboardKey.escape);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('Transaksi selesai'), findsNothing, reason: 'Esc menutup kartu kembalian');
+    expect(find.text('Scan barcode barang untuk mulai'), findsOneWidget);
+
+    // Cek harga setelah kartu ditutup: scan saja, tidak masuk daftar.
+    await t.enterText(find.byKey(const ValueKey('scan')), '8990001');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('Gula Pasir 1 kg'), findsOneWidget);
+    expect(find.text(formatRupiah(17500)), findsWidgets);
     s.app.keluar();
   });
 
@@ -193,9 +243,7 @@ void main() {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.kasir);
     await _pasang(t, s.app);
-    await t.enterText(find.byKey(const ValueKey('scan')), '8990003');
-    await t.testTextInput.receiveAction(TextInputAction.done);
-    await t.pump(const Duration(milliseconds: 100));
+    await _scanMasuk(t, '8990003');
     await t.sendKeyEvent(LogicalKeyboardKey.f12);
     await t.pump(const Duration(milliseconds: 400));
     await t.pump(const Duration(milliseconds: 400));
