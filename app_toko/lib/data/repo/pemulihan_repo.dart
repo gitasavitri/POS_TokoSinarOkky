@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:pos_core/pos_core.dart';
 
 import '../database.dart';
+import '../model.dart';
 import 'katalog_repo.dart';
 import 'pengaturan_repo.dart';
 
@@ -31,6 +32,7 @@ class PemulihanRepo {
 
   static const kKeranjang = 'keranjang_tersimpan';
   static const kStrukBelumCetak = 'struk_belum_cetak';
+  static const kTukar = 'tukar_tersimpan';
 
   // ---------------------------------------------------------------- keranjang
 
@@ -92,6 +94,25 @@ class PemulihanRepo {
   }
 
   void hapusKeranjang() => _pengaturan.simpan(kKeranjang, null);
+
+  // ---------------------------------------------------------------- tukar barang (revisi F)
+
+  /// Barang tukaran yang sedang dibawa di layar Transaksi (belum dibayar). Null = hapus.
+  void simpanTukar(DraftTukar? tukar) => _pengaturan.simpan(kTukar, tukar == null ? null : jsonEncode(tukar.keJson()));
+
+  /// Isi mentah draft tukar tersimpan (dimuat ulang lewat `PenjualanRepo.draftTukarDariJson`).
+  Map<String, Object?>? muatTukar() {
+    final teks = _pengaturan.ambil(kTukar);
+    if (teks == null) return null;
+    try {
+      return jsonDecode(teks) as Map<String, Object?>;
+    } on FormatException {
+      hapusTukar();
+      return null;
+    }
+  }
+
+  void hapusTukar() => _pengaturan.simpan(kTukar, null);
 
   // ---------------------------------------------------------------- struk
 

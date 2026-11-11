@@ -118,7 +118,7 @@ Galat aplikasi dicatat di folder data aplikasi, sub-folder `log`, untuk dikirim 
 - [ ] Tes cetak bagus dan struk asli terbaca (nama toko, alamat, barcode struk).
 - [ ] Semua barang yang dijual sudah masuk lewat **Barang masuk**. Scan 10 barang acak, harganya harus benar.
 - [ ] Harga grosir dicoba: misalnya beli tepat sejumlah minimal grosir, harga satuannya berubah dan ada tanda `*G` di struk.
-- [ ] Coba batal transaksi (perlu PIN SPV) dan retur (SPV), lalu cek laporan.
+- [ ] Coba batal transaksi (perlu PIN SPV), kembalikan uang dan tukar barang (kasir, menu Tukar / kembalikan barang atau scan struk di layar Transaksi), lalu cek laporan dan "Perlu dicek" di akun SPV.
 - [ ] Buka shift dengan modal, lalu tutup shift. Selisih kas harus 0 dan file cadangan harus muncul.
 - [ ] **Siapkan cadangan manual**: nota tulis tangan + kalkulator + daftar harga cetak, kalau PC atau printer
   bermasalah di hari pertama. Catat transaksinya, lalu masukkan ke sistem setelah normal.

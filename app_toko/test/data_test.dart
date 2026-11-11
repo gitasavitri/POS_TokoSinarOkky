@@ -8,6 +8,7 @@ import 'package:app_toko/data/repo/harga_repo.dart';
 import 'package:app_toko/data/repo/katalog_repo.dart';
 import 'package:app_toko/data/repo/laporan_repo.dart';
 import 'package:app_toko/data/repo/pengaturan_repo.dart';
+import 'package:app_toko/data/repo/pemulihan_repo.dart';
 import 'package:app_toko/data/repo/pengguna_repo.dart';
 import 'package:app_toko/data/repo/penjualan_repo.dart';
 import 'package:app_toko/data/repo/setup_repo.dart';
@@ -316,11 +317,11 @@ void main() {
           metode: MetodeBayar.kartu, noReferensi: '0045'); // 170.000
       jam.maju();
       final itemId = jual.itemUntukRetur(h1.transaksiId).single.itemId;
-      expect(() => jual.retur(transaksiId: h1.transaksiId, qtyPerItem: {itemId: 3}, kembaliKeStok: true, alasan: 'x', olehId: spv.id),
+      expect(() => jual.retur(cabang: cabang, transaksiId: h1.transaksiId, qtyPerItem: {itemId: 3}, alasan: 'salah beli', oleh: spv),
           throwsArgumentError);
       final kembali = jual.retur(
-          transaksiId: h1.transaksiId, qtyPerItem: {itemId: 1}, kembaliKeStok: true, alasan: 'rusak kemasan', olehId: spv.id);
-      expect(kembali, 17500);
+          cabang: cabang, transaksiId: h1.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'rusak kemasan', oleh: spv);
+      expect(kembali.total, 17500);
       expect(katalog.stok(id, cabang.id), 50 - 12 + 1);
 
       final ring = jual.ringkasanShift(shift.id);
@@ -539,6 +540,204 @@ void main() {
       expect(d.struk.kembalian, 96000);
       expect(jual.detailTransaksi(t3.transaksiId, cabang)!.status, 'Dibatalkan');
       expect(jual.detailTransaksi('tidak-ada', cabang), isNull);
+    });
+  });
+
+  group('tukar / kembalikan barang (revisi F)', () {
+    /// Gula 2 pak dibayar [metode] di shift kasir. Mengembalikan (shift, transaksi, item id).
+    (Shift, HasilSimpanTransaksi, String) jualGula({MetodeBayar metode = MetodeBayar.tunai, int qty = 2, int modal = 100000}) {
+      masukkanGula();
+      final shift = jual.bukaShift(cabangId: cabang.id, kasirId: kasir.id, modalAwal: modal);
+      final gula = katalog.untukKasirBarcode('8990001', cabang.id)!;
+      final h = jual.simpan(
+        cabang: cabang,
+        kasir: kasir,
+        shift: shift,
+        keranjang: Keranjang()..tambah(gula, qty: qty),
+        metode: metode,
+        uangDiterima: metode == MetodeBayar.tunai ? 50000 : 0,
+        noReferensi: metode.perluReferensi ? '0045' : null,
+      );
+      jam.maju(60);
+      return (shift, h, jual.itemUntukRetur(h.transaksiId).single.itemId);
+    }
+
+    String idGula() => katalog.untukKasirBarcode('8990001', cabang.id)!.id;
+
+    test('kasir retur sendiri: uang tunai walau bayar QRIS, nomor RTR, barang rusak tidak masuk stok, perlu dicek', () {
+      final (shift, h, itemId) = jualGula(metode: MetodeBayar.qris);
+      final r = jual.retur(
+        cabang: cabang,
+        transaksiId: h.transaksiId,
+        qtyPerItem: {itemId: 2},
+        rusak: {itemId},
+        alasan: 'kemasan bocor',
+        oleh: kasir,
+        shiftId: shift.id,
+      );
+      expect(r.noRetur, 'RTR-A01-261105-0001');
+      expect(r.total, 35000);
+      expect(katalog.stok(idGula(), cabang.id), 48, reason: 'rusak: tidak kembali ke stok jual');
+      final ring = jual.ringkasanShift(shift.id);
+      expect(ring.penjualanNonTunai, 35000);
+      expect(ring.returTunai, 35000, reason: 'uang retur selalu tunai');
+      expect(ring.kasSistem, 100000 - 35000);
+      final baris = db.satu('SELECT * FROM retur')!;
+      expect((baris['shift_id'], baris['cabang_id'], baris['disetujui_oleh']), (shift.id, cabang.id, null));
+      expect(db.satu('SELECT kembali_ke_stok FROM retur_item')!['kembali_ke_stok'], 0);
+      final log = db.satu("SELECT * FROM log_aktivitas WHERE aksi = 'retur'")!;
+      expect(log['pengguna_id'], kasir.id);
+      expect(jsonDecode(log['detail'] as String)['jumlah_rusak'], 2);
+      final dari = awalHariWibUtc(jam.t), sampai = dari.add(const Duration(days: 1));
+      expect(LaporanRepo(db).perluDicek(cabang.id, dari, sampai).returKasir, 1);
+      final riwayat = jual.daftarRetur(cabang.id, dari, sampai, hanyaKasir: true).single;
+      expect((riwayat.noRetur, riwayat.olehKasir, riwayat.jumlahRusak, riwayat.tunai), ('RTR-A01-261105-0001', true, 2, 35000));
+      final struk = strukSebagaiTeks(susunStrukRetur(jual.strukRetur(r.returId, cabang)!));
+      expect(struk, contains('RTR-A01-261105-0001'));
+      expect(struk, contains(h.noTransaksi));
+      // Retur kedua hari yang sama: urut berikutnya; barang sudah habis diretur.
+      expect(() => jual.retur(cabang: cabang, transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'lagi', oleh: kasir),
+          throwsArgumentError);
+    });
+
+    test('lewat 3 hari: kasir butuh PIN SPV; hari ke-3 masih boleh', () {
+      final (shift, h, itemId) = jualGula(); // 5 Nov 09.00 WIB
+      jam.t = DateTime.utc(2026, 11, 8, 16, 59); // 8 Nov 23.59 WIB (hari ke-3)
+      expect(jual.aksesReturStruk(h.transaksiId, Peran.kasir), Akses.ya);
+      jam.t = DateTime.utc(2026, 11, 8, 17, 0); // 9 Nov 00.00 WIB (hari ke-4)
+      expect(jual.aksesReturStruk(h.transaksiId, Peran.kasir), Akses.pinSpv);
+      expect(jual.aksesReturStruk(h.transaksiId, Peran.spv), Akses.ya);
+      expect(() => jual.retur(cabang: cabang, transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'salah beli', oleh: kasir),
+          throwsStateError);
+      expect(
+          () => jual.retur(
+              cabang: cabang, transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'salah beli', oleh: kasir, disetujuiOleh: kasir),
+          throwsStateError,
+          reason: 'PIN kasir lain tidak sah');
+      final r = jual.retur(
+          cabang: cabang, transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'salah beli', oleh: kasir, disetujuiOleh: spv, shiftId: shift.id);
+      expect(r.noRetur, 'RTR-A01-261109-0001', reason: 'nomor memakai tanggal retur');
+      expect(db.satu('SELECT disetujui_oleh FROM retur')!['disetujui_oleh'], spv.id);
+      expect(db.satu("SELECT disetujui_oleh FROM log_aktivitas WHERE aksi = 'retur'")!['disetujui_oleh'], spv.id);
+    });
+
+    test('jumlah dijaga juga oleh database; transaksi dibatalkan tidak bisa diretur', () {
+      final (_, h, itemId) = jualGula();
+      jual.retur(cabang: cabang, transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'salah beli', oleh: kasir);
+      final returId = db.satu('SELECT id FROM retur')!['id'];
+      expect(
+          () => db.jalankan('INSERT INTO retur_item (id, retur_id, transaksi_item_id, qty, kembali_ke_stok) VALUES (?,?,?,?,1)',
+              [buatId(), returId, itemId, 2]),
+          throwsA(isA<SqliteException>()));
+      final h2 = jual.simpan(
+          cabang: cabang,
+          kasir: kasir,
+          shift: jual.shiftAktif(kasir.id)!,
+          keranjang: Keranjang()..tambah(katalog.untukKasirBarcode('8990001', cabang.id)!),
+          metode: MetodeBayar.tunai,
+          uangDiterima: 20000);
+      jual.batalkan(transaksiId: h2.transaksiId, alasan: 'salah', dimintaOleh: kasir.id, disetujuiOleh: spv.id);
+      final i2 = jual.itemUntukRetur(h2.transaksiId).single.itemId;
+      expect(() => jual.retur(cabang: cabang, transaksiId: h2.transaksiId, qtyPerItem: {i2: 1}, alasan: 'salah beli', oleh: kasir),
+          throwsStateError);
+    });
+
+    test('tukar: nilai retur jadi potongan, pembeli bayar selisih, satu struk tukar', () {
+      final (shift, h, itemId) = jualGula(); // 2 × 17.500 tunai
+      final draft = jual.siapkanTukar(transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'mau yang lain', oleh: kasir);
+      expect(draft.nilai, 17500);
+      final gula = katalog.untukKasirBarcode('8990001', cabang.id)!;
+      // Belanja baru 2 pak = 35.000 → bayar 17.500.
+      expect(
+          () => jual.simpan(
+              cabang: cabang, kasir: kasir, shift: shift, keranjang: Keranjang()..tambah(gula, qty: 2), metode: MetodeBayar.tunai,
+              uangDiterima: 17000, tukar: draft),
+          throwsArgumentError,
+          reason: 'uang kurang dari selisih');
+      final t = jual.simpan(
+        cabang: cabang,
+        kasir: kasir,
+        shift: shift,
+        keranjang: Keranjang()..tambah(gula, qty: 2),
+        metode: MetodeBayar.tunai,
+        uangDiterima: 20000,
+        tukar: draft,
+      );
+      expect(t.struk.tukar!.noRetur, 'RTR-A01-261105-0001');
+      expect(t.struk.totalBayar, 17500);
+      expect(t.struk.kembalian, 2500);
+      expect(katalog.stok(gula.id, cabang.id), 50 - 2 + 1 - 2);
+      final p = db.satu('SELECT * FROM pembayaran WHERE transaksi_id = ?', [t.transaksiId])!;
+      expect((p['potongan_retur'], p['jumlah_diterima'], p['kembalian']), (17500, 20000, 2500));
+      final r = db.satu('SELECT * FROM retur')!;
+      expect((r['transaksi_tukar_id'], r['dipotong'], r['total_kembali']), (t.transaksiId, 17500, 17500));
+
+      final ring = jual.ringkasanShift(shift.id);
+      expect(ring.penjualanTunai, 35000 + 17500);
+      expect(ring.potonganTukar, 17500);
+      expect(ring.returTunai, 0, reason: 'tidak ada uang yang keluar');
+      expect(ring.penjualan, 70000);
+      expect(ring.kasSistem, 100000 + 52500);
+
+      final dari = awalHariWibUtc(jam.t), sampai = dari.add(const Duration(days: 1));
+      final lap = LaporanRepo(db).ringkasan(cabang.id, dari, sampai);
+      expect(lap.penjualanBersih, 70000 - 17500);
+      expect((lap.tunai, lap.nonTunai), (52500, 0));
+
+      // Cetak ulang tetap berisi bagian tukar; transaksi tukar tidak bisa dibatalkan.
+      final ulang = strukSebagaiTeks(susunStruk(jual.struk(t.transaksiId, cabang)!));
+      expect(ulang, contains('TUKAR BARANG'));
+      expect(ulang, contains(h.noTransaksi));
+      expect(jual.detailTransaksi(t.transaksiId, cabang)!.dariTukar, isTrue);
+      expect(() => jual.batalkan(transaksiId: t.transaksiId, alasan: 'x', dimintaOleh: kasir.id, disetujuiOleh: spv.id), throwsStateError);
+      expect(
+          () => db.jalankan('INSERT INTO pembatalan (transaksi_id, alasan, diminta_oleh, disetujui_oleh, created_at) VALUES (?,?,?,?,?)',
+              [t.transaksiId, 'x', kasir.id, spv.id, isoUtc(jam.t)]),
+          throwsA(isA<SqliteException>()));
+      // Draft yang sama tidak bisa dipakai dua kali (barang sudah diretur semua di baris itu? tidak — sisa 1).
+      expect(jual.itemUntukRetur(h.transaksiId).single.sisa, 1);
+    });
+
+    test('tukar ke barang lebih murah: sisa dikembalikan tunai, bayar Rp 0 dicatat tunai', () {
+      final (shift, h, itemId) = jualGula(); // 35.000 tunai
+      final draft = jual.siapkanTukar(transaksiId: h.transaksiId, qtyPerItem: {itemId: 2}, rusak: {itemId}, alasan: 'mau satu saja', oleh: kasir);
+      final gula = katalog.untukKasirBarcode('8990001', cabang.id)!;
+      final t = jual.simpan(
+        cabang: cabang,
+        kasir: kasir,
+        shift: shift,
+        keranjang: Keranjang()..tambah(gula),
+        metode: MetodeBayar.qris, // diabaikan: tidak ada uang yang dibayar
+        tukar: draft,
+      );
+      expect(t.struk.metode, MetodeBayar.tunai);
+      expect(t.struk.totalBayar, 0);
+      expect(t.struk.tukar!.sisaDikembalikan, 17500);
+      final ring = jual.ringkasanShift(shift.id);
+      expect(ring.returTunai, 17500);
+      expect(ring.potonganTukar, 17500);
+      expect(ring.kasSistem, 100000 + 35000 - 17500);
+      expect(katalog.stok(gula.id, cabang.id), 50 - 2 - 1, reason: 'barang lama rusak, tidak masuk stok');
+    });
+
+    test('draft tukar tersimpan untuk listrik padam dan terhapus saat transaksi tersimpan', () {
+      final (shift, h, itemId) = jualGula();
+      final pulih = PemulihanRepo(db);
+      final draft = jual.siapkanTukar(transaksiId: h.transaksiId, qtyPerItem: {itemId: 1}, alasan: 'mau yang lain', oleh: kasir);
+      pulih.simpanTukar(draft);
+      final muat = jual.draftTukarDariJson(pulih.muatTukar()!, cabang.id)!;
+      expect((muat.transaksiId, muat.nilai, muat.qtyPerItem[itemId]), (h.transaksiId, 17500, 1));
+      jual.simpan(
+        cabang: cabang,
+        kasir: kasir,
+        shift: shift,
+        keranjang: Keranjang()..tambah(katalog.untukKasirBarcode('8990001', cabang.id)!),
+        metode: MetodeBayar.tunai,
+        tukar: muat,
+      );
+      expect(pulih.muatTukar(), isNull);
+      // Sudah dipakai: barangnya sudah diretur, draft lama tidak berlaku lagi kalau melebihi sisa.
+      expect(jual.draftTukarDariJson({...draft.keJson(), 'qty': {itemId: 2}}, cabang.id), isNull);
     });
   });
 

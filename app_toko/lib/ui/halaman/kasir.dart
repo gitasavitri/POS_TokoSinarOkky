@@ -10,6 +10,7 @@ import '../../layanan/aplikasi.dart';
 import '../komponen/pin.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
+import 'retur.dart';
 import 'shift.dart';
 import 'transaksi.dart';
 
@@ -23,8 +24,8 @@ class HalamanKasir extends StatefulWidget {
   final VoidCallback? onBukaUbahHarga;
   final VoidCallback? onBukaPengaturan;
 
-  /// Barang dari transaksi yang dibatalkan lewat "Ubah transaksi" (dibuka dari menu), dimasukkan saat layar dibuka.
-  final IsiUlang? isiAwal;
+  /// Dari menu: barang transaksi yang dibatalkan lewat "Ubah transaksi", atau barang tukaran (revisi F).
+  final KeTransaksi? isiAwal;
   @override
   State<HalamanKasir> createState() => _HalamanKasirState();
 }
@@ -45,6 +46,9 @@ class _HalamanKasirState extends State<HalamanKasir> {
 
   /// Barang yang sedang diinput (sudah dikenali dari barcode/cari, belum masuk daftar).
   BarangJual? _pilih;
+
+  /// Tukar barang (revisi F): barang yang dikembalikan pembeli. Nilainya memotong total belanja di layar.
+  DraftTukar? _tukar;
 
   /// Enter ditekan tapi barcode/nama tidak ditemukan.
   bool _tidakKetemu = false;
@@ -77,7 +81,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
   Future<void> _pastikanShift() async {
     if (app.shiftAktif != null) {
       await _pulihkan();
-      if (widget.isiAwal != null && mounted) _isiUlang(widget.isiAwal!);
+      if (widget.isiAwal != null && mounted) _lanjut(widget.isiAwal!);
       return;
     }
     final s = await bukaShiftDialog(context);
@@ -92,13 +96,74 @@ class _HalamanKasirState extends State<HalamanKasir> {
     }
     app.aturShift(s);
     await _pulihkan();
-    if (widget.isiAwal != null && mounted) _isiUlang(widget.isiAwal!);
+    if (widget.isiAwal != null && mounted) _lanjut(widget.isiAwal!);
+    _fokuskan();
+  }
+
+  void _lanjut(KeTransaksi k) {
+    if (k.isiUlang != null) _isiUlang(k.isiUlang!);
+    if (k.tukar != null) _mulaiTukar(k.tukar!);
+  }
+
+  /// Tukar barang (revisi F): barang yang dikembalikan memotong total belanja di layar.
+  /// Belanjaan yang sudah di-scan tetap (biasanya barang penggantinya).
+  void _mulaiTukar(DraftTukar d) {
+    if (_tukar != null) {
+      tampilkanPesan(context, 'Masih ada tukar barang yang belum dibayar. Selesaikan atau batalkan dulu.', galat: true);
+      return;
+    }
+    setState(() {
+      _tutupKartuSelesai();
+      _tukar = d;
+    });
+    _simpanTukar();
+    tampilkanPesan(context, 'Tukar barang: scan barang penggantinya. Nilai ${formatRupiah(d.nilai)} memotong total.');
+    _fokuskan();
+  }
+
+  void _simpanTukar() {
+    try {
+      app.pemulihan.simpanTukar(_tukar);
+    } catch (e, st) {
+      app.catatan?.tulis(e, st, konteks: 'simpan tukar');
+    }
+  }
+
+  Future<void> _batalTukar() async {
+    final ok = await konfirmasi(
+      context,
+      judul: 'Batalkan tukar barang?',
+      isi: 'Barang dari ${_tukar!.noTransaksiAsal} tidak jadi ditukar. Belum ada yang tersimpan. '
+          'Barang yang sudah di-scan tetap di daftar belanja.',
+      ya: 'Batalkan tukar',
+      bahaya: true,
+    );
+    if (!ok || !mounted) return _fokuskan();
+    setState(() => _tukar = null);
+    _simpanTukar();
+    _fokuskan();
+  }
+
+  /// Tukar / kembalikan barang dari layar Transaksi (tombol, atau scan barcode struk di kolom Barcode).
+  Future<void> _bukaRetur([String? transaksiId]) async {
+    if (_tukar != null) {
+      tampilkanPesan(context, 'Selesaikan atau batalkan tukar barang yang sedang berjalan dulu.', galat: true);
+      return _fokuskan();
+    }
+    final d = await bukaDialogRetur(context, transaksiId, bisaTukar: true);
+    if (!mounted) return;
+    if (d != null) return _mulaiTukar(d);
+    setState(() {});
     _fokuskan();
   }
 
   /// "Ubah transaksi": barang transaksi yang baru dibatalkan dimasukkan ke daftar belanja (harga sekarang).
   /// Belanjaan yang sedang di layar ditahan dulu supaya tidak hilang.
   void _isiUlang(IsiUlang isi) {
+    if (_tukar != null) {
+      tampilkanPesan(context, 'Selesaikan atau batalkan tukar barang dulu.', galat: true);
+      return;
+    }
     var hilang = 0;
     setState(() {
       _tutupKartuSelesai();
@@ -155,6 +220,17 @@ class _HalamanKasirState extends State<HalamanKasir> {
         }
       }
       app.pemulihan.selesaiCetak();
+    }
+
+    final tj = app.pemulihan.muatTukar();
+    if (tj != null && _tukar == null) {
+      final d = app.penjualan.draftTukarDariJson(tj, app.cabang.id);
+      if (d == null) {
+        app.pemulihan.hapusTukar();
+      } else if (mounted) {
+        setState(() => _tukar = d);
+        tampilkanPesan(context, 'Tukar barang dari ${d.noTransaksiAsal} belum dibayar dan dilanjutkan.');
+      }
     }
 
     if (!_keranjang.kosong || !mounted) return;
@@ -272,6 +348,13 @@ class _HalamanKasirState extends State<HalamanKasir> {
     _enterKosong = null;
     final b = app.katalog.untukKasirBarcode(isi, app.cabang.id);
     if (b != null) return _pilihBarang(b);
+    // Barcode struk (bukan barang): buka tukar / kembalikan barang untuk struk itu.
+    final trx = app.penjualan.idDariNomor(app.cabang.id, isi);
+    if (trx != null) {
+      _scan.clear();
+      setState(() => _pilih = null);
+      return _bukaRetur(trx);
+    }
     final hasil = app.katalog.cari(isi, app.cabang.id, batas: 30).where((d) => d.untukDijual != null).toList();
     if (hasil.length == 1) return _pilihBarang(hasil.single.untukDijual!, isiKolom: true);
     if (hasil.isEmpty) {
@@ -381,6 +464,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
 
   void _tahan() {
     if (_keranjang.kosong) return;
+    if (_tukar != null) {
+      tampilkanPesan(context, 'Tukar barang tidak bisa ditahan. Selesaikan atau batalkan tukar dulu.', galat: true);
+      return;
+    }
     setState(() {
       _ditahan.add(_keranjang.salin());
       _keranjang.kosongkan();
@@ -393,6 +480,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
 
   Future<void> _ambilDitahan() async {
     if (_ditahan.isEmpty) return;
+    if (_tukar != null) {
+      tampilkanPesan(context, 'Selesaikan atau batalkan tukar barang dulu.', galat: true);
+      return;
+    }
     final i = await showDialog<int>(
       context: context,
       builder: (c) => SimpleDialog(
@@ -432,9 +523,10 @@ class _HalamanKasirState extends State<HalamanKasir> {
     final hasil = await showDialog<HasilSimpanTransaksi>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => DialogBayar(keranjang: _keranjang, shift: shift),
+      builder: (_) => DialogBayar(keranjang: _keranjang, shift: shift, tukar: _tukar),
     );
     if (hasil == null) return _fokuskan();
+    _tukar = null; // retur sudah tersimpan bersama transaksi
     final otomatis = app.cetakOtomatis;
     // Kembalian langsung tampil di tengah layar dan tetap ada sampai barang berikutnya di-scan.
     setState(() {
@@ -474,14 +566,14 @@ class _HalamanKasirState extends State<HalamanKasir> {
   }
 
   Future<void> _transaksiTerakhir() async {
-    final isi = await showDialog<IsiUlang>(context: context, builder: (_) => const DialogTransaksiTerakhir());
+    final isi = await showDialog<KeTransaksi>(context: context, builder: (_) => const DialogTransaksiTerakhir());
     if (!mounted) return;
-    if (isi != null) return _isiUlang(isi);
+    if (isi != null) return _lanjut(isi);
     _fokuskan();
   }
 
   Future<void> _tutupShift() async {
-    if (!_keranjang.kosong || _ditahan.isNotEmpty) {
+    if (!_keranjang.kosong || _ditahan.isNotEmpty || _tukar != null) {
       tampilkanPesan(context, 'Selesaikan atau kosongkan belanja dan transaksi ditahan dulu.', galat: true);
       return;
     }
@@ -697,6 +789,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
         const SingleActivator(LogicalKeyboardKey.f6): _kas,
         const SingleActivator(LogicalKeyboardKey.f8): _tahan,
         const SingleActivator(LogicalKeyboardKey.f9): _transaksiTerakhir,
+        const SingleActivator(LogicalKeyboardKey.f10): () => _bukaRetur(),
         const SingleActivator(LogicalKeyboardKey.f12): _bayar,
         const SingleActivator(LogicalKeyboardKey.delete): () {
           if (_barisDipilih != null && _barisDipilih! < _keranjang.jumlahJenis) _hapusBaris(_barisDipilih!);
@@ -736,13 +829,21 @@ class _HalamanKasirState extends State<HalamanKasir> {
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 22, 8),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [
-                            const Text('TOTAL BELANJA',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Warna.suksesTua)),
+                            Text(_tukar == null ? 'TOTAL BELANJA' : 'TOTAL BAYAR (TUKAR)',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Warna.suksesTua)),
                             FittedBox(
                               fit: BoxFit.scaleDown,
-                              child: Text(formatRupiah(_keranjang.total),
-                                  style: const TextStyle(fontSize: 60, fontWeight: FontWeight.w800, height: 1.1, color: Warna.utamaTua)),
+                              child: Text(
+                                  formatRupiah(_tukar == null
+                                      ? _keranjang.total
+                                      : hitungTukar(nilaiRetur: _tukar!.nilai, totalBelanja: _keranjang.total).bayar),
+                                  key: const ValueKey('total-belanja'),
+                                  // Saat tukar ada baris rincian di bawahnya: angka sedikit lebih kecil supaya tinggi kotak tetap.
+                                  style: TextStyle(fontSize: _tukar == null ? 60 : 46, fontWeight: FontWeight.w800, height: 1.1, color: Warna.utamaTua)),
                             ),
+                            if (_tukar != null)
+                              Text('belanja ${formatRupiah(_keranjang.total)} − barang kembali ${formatRupiah(_tukar!.nilai)}',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Warna.teks2)),
                           ]),
                         ),
                       ),
@@ -788,6 +889,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                             color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Warna.garis, width: 1.5)),
                         clipBehavior: Clip.antiAlias,
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          if (_tukar != null) _BannerTukar(tukar: _tukar!, totalBelanja: _keranjang.total, onBatal: _batalTukar),
                           const _KepalaKeranjang(),
                           Expanded(
                             child: _keranjang.kosong
@@ -797,6 +899,9 @@ class _HalamanKasirState extends State<HalamanKasir> {
                                       SizedBox(height: 10),
                                       Text('Scan barcode barang untuk mulai',
                                           style: TextStyle(fontSize: 22, color: Warna.teksPudar, fontWeight: FontWeight.w600)),
+                                      SizedBox(height: 6),
+                                      Text('Tukar / kembalikan barang: scan barcode di struk, atau tekan F10',
+                                          style: TextStyle(fontSize: 16, color: Warna.teksPudar)),
                                     ]),
                                   )
                                 : ListView.builder(
@@ -927,7 +1032,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
               _TombolKecil('Tutup shift', _tutupShift),
               if (widget.onKembaliKeMenu != null)
                 _TombolKecil('← Menu', () {
-                  if (!_keranjang.kosong || _ditahan.isNotEmpty) {
+                  if (!_keranjang.kosong || _ditahan.isNotEmpty || _tukar != null) {
                     tampilkanPesan(context, 'Selesaikan atau kosongkan belanja dulu.', galat: true);
                     return;
                   }
@@ -936,7 +1041,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                 }, putih: true)
               else
                 _TombolKecil('Keluar', () {
-                  if (!_keranjang.kosong || _ditahan.isNotEmpty) {
+                  if (!_keranjang.kosong || _ditahan.isNotEmpty || _tukar != null) {
                     tampilkanPesan(context, 'Selesaikan atau kosongkan belanja dulu.', galat: true);
                     return;
                   }
@@ -1172,9 +1277,12 @@ class _TombolWarna extends StatelessWidget {
 // ============================================================================ dialog pembayaran
 
 class DialogBayar extends StatefulWidget {
-  const DialogBayar({super.key, required this.keranjang, required this.shift});
+  const DialogBayar({super.key, required this.keranjang, required this.shift, this.tukar});
   final Keranjang keranjang;
   final Shift shift;
+
+  /// Tukar barang (revisi F): nilai barang kembali memotong total, pembeli membayar selisihnya.
+  final DraftTukar? tukar;
   @override
   State<DialogBayar> createState() => _DialogBayarState();
 }
@@ -1188,9 +1296,16 @@ class _DialogBayarState extends State<DialogBayar> {
   bool _sibuk = false;
   String? _galat;
 
-  int get _total => widget.keranjang.total;
+  HitungTukar get _hitung => hitungTukar(nilaiRetur: widget.tukar?.nilai ?? 0, totalBelanja: widget.keranjang.total);
 
-  HasilPembayaran get _cek => cekPembayaran(metode: _metode, total: _total, uangDiterima: _diterima, noReferensi: _ref.text);
+  /// Yang harus dibayar pembeli (setelah potongan tukar).
+  int get _total => _hitung.bayar;
+
+  /// Belanja lunas dengan barang tukaran: tidak ada uang yang dibayar.
+  bool get _lunasTukar => widget.tukar != null && _total == 0;
+
+  HasilPembayaran get _cek => cekPembayaran(
+      metode: _lunasTukar ? MetodeBayar.tunai : _metode, total: _total, uangDiterima: _diterima, noReferensi: _ref.text);
 
   @override
   void dispose() {
@@ -1210,9 +1325,10 @@ class _DialogBayarState extends State<DialogBayar> {
         kasir: app.penggunaAktif!,
         shift: widget.shift,
         keranjang: widget.keranjang,
-        metode: _metode,
-        uangDiterima: _diterima,
-        noReferensi: _metode.perluReferensi ? _ref.text : null,
+        metode: _lunasTukar ? MetodeBayar.tunai : _metode,
+        uangDiterima: _lunasTukar ? 0 : _diterima,
+        noReferensi: !_lunasTukar && _metode.perluReferensi ? _ref.text : null,
+        tukar: widget.tukar,
       );
       Navigator.pop(context, h);
     } catch (e) {
@@ -1226,7 +1342,8 @@ class _DialogBayarState extends State<DialogBayar> {
   @override
   Widget build(BuildContext context) {
     final cek = _cek;
-    final tunai = _metode == MetodeBayar.tunai;
+    final tunai = _metode == MetodeBayar.tunai || _lunasTukar;
+    final sisaTukar = _hitung.sisaDikembalikan;
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.pop(context)},
       child: Dialog(
@@ -1241,7 +1358,9 @@ class _DialogBayarState extends State<DialogBayar> {
               child: Row(children: [
                 const Icon(Icons.payments, color: Colors.white, size: 30),
                 const SizedBox(width: 12),
-                const Expanded(child: Text('Pembayaran', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
+                Expanded(
+                    child: Text(widget.tukar == null ? 'Pembayaran' : 'Pembayaran tukar barang',
+                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
                 Text('${widget.keranjang.jumlahBarang} BARANG',
                     style: const TextStyle(color: Warna.utamaTeksTerang, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
               ]),
@@ -1249,6 +1368,15 @@ class _DialogBayarState extends State<DialogBayar> {
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (widget.tukar != null) ...[
+                  KotakPesan(
+                    'Belanja ${formatRupiah(widget.keranjang.total)} − barang kembali ${formatRupiah(widget.tukar!.nilai)} '
+                    '(${widget.tukar!.jumlahBarang} barang dari ${widget.tukar!.noTransaksiAsal})'
+                    '${sisaTukar > 0 ? '. Sisa ${formatRupiah(sisaTukar)} dikembalikan tunai ke pembeli.' : '.'}',
+                    jenis: JenisPesan.info,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 IntrinsicHeight(
                   child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Expanded(child: _KotakBesar(
@@ -1259,8 +1387,8 @@ class _DialogBayarState extends State<DialogBayar> {
                           ? const _KotakTeks('Pastikan pembayaran sudah berhasil di mesin EDC, QRIS, atau aplikasi bank sebelum menekan Selesai.')
                           : cek.boleh
                               ? _KotakBesar(
-                                  label: 'KEMBALIAN',
-                                  nilai: formatRupiah(cek.kembalian),
+                                  label: sisaTukar > 0 ? 'KEMBALIKAN TUNAI' : 'KEMBALIAN',
+                                  nilai: formatRupiah(cek.kembalian + sisaTukar),
                                   latar: Warna.oranyeMuda,
                                   garis: Warna.oranyeGaris,
                                   aksen: Warna.oranyeTegas,
@@ -1271,6 +1399,9 @@ class _DialogBayarState extends State<DialogBayar> {
                   ]),
                 ),
                 const SizedBox(height: 20),
+                if (_lunasTukar)
+                  const _KotakTeks('Belanja lunas dengan barang tukaran. Tidak ada uang yang dibayar pembeli.')
+                else
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: DropdownButtonFormField<MetodeBayar>(
@@ -1321,6 +1452,8 @@ class _DialogBayarState extends State<DialogBayar> {
                     child: SizedBox(
                       height: 68,
                       child: FilledButton.icon(
+                        key: const ValueKey('selesai-bayar'),
+                        autofocus: _lunasTukar,
                         onPressed: cek.boleh && !_sibuk ? _selesai : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: Warna.sukses,
@@ -1430,6 +1563,7 @@ class KartuKembalian extends StatelessWidget {
     final s = hasil.struk;
     final tunai = s.metode == MetodeBayar.tunai;
     final otomatis = context.app.cetakOtomatis;
+    final sisaTukar = s.tukar?.sisaDikembalikan ?? 0;
     final Widget statusCetak;
     if (mencetak) {
       statusCetak = const _Pil(ikon: Icons.print, teks: 'Struk sedang dicetak', latar: Warna.utamaMuda, warna: Warna.utamaTua);
@@ -1458,8 +1592,9 @@ class KartuKembalian extends StatelessWidget {
               child: Row(children: [
                 const Icon(Icons.check_circle, color: Colors.white, size: 30),
                 const SizedBox(width: 12),
-                const Expanded(
-                    child: Text('Transaksi selesai', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
+                Expanded(
+                    child: Text(s.tukar == null ? 'Transaksi selesai' : 'Tukar barang selesai',
+                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
                 Text(hasil.noTransaksi, style: const TextStyle(fontFamily: fontMono, color: Color(0xFFDDF5E6), fontSize: 16, fontWeight: FontWeight.w700)),
               ]),
             ),
@@ -1468,19 +1603,19 @@ class KartuKembalian extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 if (tunai)
                   _KotakBesar(
-                    label: 'KEMBALIAN',
-                    nilai: formatRupiah(s.kembalian),
+                    label: sisaTukar > 0 ? 'KEMBALIKAN TUNAI' : 'KEMBALIAN',
+                    nilai: formatRupiah(s.kembalian + sisaTukar),
                     latar: Warna.oranyeMuda,
                     garis: Warna.oranyeGaris,
                     aksen: Warna.oranyeTegas,
                     warna: Warna.oranyeTua,
                     besar: true,
-                    lencana: s.kembalian == 0 ? 'UANG PAS' : null,
+                    lencana: s.kembalian + sisaTukar == 0 ? 'UANG PAS' : (sisaTukar > 0 ? 'TERMASUK SISA TUKAR' : null),
                   )
                 else
                   _KotakBesar(
                     label: 'DIBAYAR ${s.metode.label.toUpperCase()}',
-                    nilai: formatRupiah(s.total),
+                    nilai: formatRupiah(s.totalBayar),
                     latar: Warna.utamaMuda,
                     garis: Warna.utamaGarisMuda,
                     aksen: Warna.utama,
@@ -1512,6 +1647,51 @@ class KartuKembalian extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// Pita di atas daftar belanja selama tukar barang: barang yang dikembalikan dan nilainya.
+class _BannerTukar extends StatelessWidget {
+  const _BannerTukar({required this.tukar, required this.totalBelanja, required this.onBatal});
+  final DraftTukar tukar;
+  final int totalBelanja;
+  final VoidCallback onBatal;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = hitungTukar(nilaiRetur: tukar.nilai, totalBelanja: totalBelanja);
+    final barang = tukar.item.map((i) => '${i.nama} ×${i.qty}${i.rusak ? ' (rusak)' : ''}').join(', ');
+    return Container(
+      key: const ValueKey('banner-tukar'),
+      color: Warna.oranyeMuda,
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+      child: Row(children: [
+        const Icon(Icons.swap_horiz, color: Warna.oranyeTua, size: 30),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('TUKAR BARANG · barang kembali dari ${tukar.noTransaksiAsal} · ${formatRupiah(tukar.nilai)}',
+                style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: Warna.oranyeTua)),
+            Text(
+              totalBelanja == 0
+                  ? '$barang · scan barang penggantinya'
+                  : h.sisaDikembalikan > 0
+                      ? '$barang · sisa ${formatRupiah(h.sisaDikembalikan)} dikembalikan tunai'
+                      : '$barang · pembeli bayar selisih ${formatRupiah(h.bayar)}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, color: Warna.teks2, fontWeight: FontWeight.w600),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton(
+          key: const ValueKey('batal-tukar'),
+          onPressed: onBatal,
+          style: OutlinedButton.styleFrom(foregroundColor: Warna.merah, side: const BorderSide(color: Warna.merahGaris, width: 2)),
+          child: const Text('Batalkan tukar'),
+        ),
+      ]),
     );
   }
 }

@@ -584,6 +584,110 @@ void main() {
     s.app.keluar();
   });
 
+  // ------------------------------------------------------------------ revisi F: tukar / kembalikan barang
+
+  Future<void> tambahRetur(WidgetTester t, String itemId) async {
+    await t.tap(find.descendant(of: find.byKey(ValueKey('retur-$itemId')), matching: find.byIcon(Icons.add)));
+    await t.pump();
+  }
+
+  testWidgets('kasir: kembalikan uang tunai dari menu, struk RTR dicetak, SPV melihat di Perlu dicek (F)', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.tap(find.text(MenuKasir.retur.label));
+    await _tunggu(t);
+    await _foto(t, '40-kasir-retur-scan');
+    final no = 'TRX-A01-${kodeTanggal(DateTime.now())}-0002'; // minyak, dibayar QRIS
+    final trx = s.app.penjualan.idDariNomor(s.app.cabang.id, no)!;
+    await t.enterText(find.byKey(const ValueKey('scan-struk-retur')), isiBarcodeStruk(no));
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await _tunggu(t);
+    final item = s.app.penjualan.itemUntukRetur(trx).single;
+    await tambahRetur(t, item.itemId);
+    await t.tap(find.byKey(ValueKey('rusak-${item.itemId}')));
+    await t.enterText(find.byKey(const ValueKey('alasan-retur')), 'Tutup botol bocor');
+    await t.pump();
+    expect(find.byKey(const ValueKey('nilai-retur')), findsOneWidget);
+    expect(find.text(formatRupiah(36000)), findsWidgets);
+    await _foto(t, '41-kasir-retur-pilih');
+    await t.tap(find.byKey(const ValueKey('tombol-kembalikan-uang')));
+    await _tunggu(t);
+    await t.tap(find.text('Kembalikan uang'));
+    await _tunggu(t);
+    expect(find.byKey(const ValueKey('hasil-retur')), findsOneWidget);
+    expect(find.text('KEMBALIKAN UANG TUNAI'), findsOneWidget);
+    final cetak = utf8.decode((s.app.printer as PrinterUji).riwayat.last, allowMalformed: true);
+    expect(cetak, contains('STRUK RETUR'));
+    expect(cetak, contains('RTR-A01-${kodeTanggal(DateTime.now())}-0001'));
+    expect(cetak.toLowerCase(), isNot(contains('tidak dapat')));
+    await _foto(t, '42-kasir-retur-selesai');
+    final ring = s.app.penjualan.ringkasanShift(s.app.shiftAktif!.id);
+    expect(ring.returTunai, 36000, reason: 'QRIS tetap dikembalikan tunai');
+    await t.tap(find.byKey(const ValueKey('selesai-retur')));
+    await _tunggu(t);
+    s.app.keluar();
+
+    s.app.masuk(s.spv);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('1 tukar / retur oleh kasir'), findsOneWidget);
+    await _foto(t, '43-spv-perlu-dicek-retur');
+    await t.tap(find.text('1 tukar / retur oleh kasir'));
+    await _tunggu(t);
+    expect(find.textContaining('Retur & tukar hari ini (1)'), findsOneWidget);
+    expect(find.text('Uang tunai'), findsOneWidget);
+    expect(find.text('1 (1 rusak)'), findsOneWidget);
+    await _foto(t, '44-spv-riwayat-retur');
+    s.app.keluar();
+  });
+
+  testWidgets('kasir: scan struk di layar Transaksi → tukar barang, bayar selisih, satu struk tukar (F)', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await _keTransaksi(t);
+    final no = 'TRX-A01-${kodeTanggal(DateTime.now())}-0001'; // 12 gula + 2 sabun
+    final trx = s.app.penjualan.idDariNomor(s.app.cabang.id, no)!;
+    await t.enterText(find.byKey(const ValueKey('scan')), isiBarcodeStruk(no));
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await _tunggu(t);
+    expect(find.text('Tukar / kembalikan barang'), findsOneWidget, reason: 'barcode struk membuka dialog retur');
+    final sabun = s.app.penjualan.itemUntukRetur(trx).firstWhere((i) => i.nama.startsWith('Sabun'));
+    await tambahRetur(t, sabun.itemId);
+    await tambahRetur(t, sabun.itemId);
+    await t.enterText(find.byKey(const ValueKey('alasan-retur')), 'Salah varian');
+    await t.pump();
+    await _foto(t, '45-kasir-tukar-pilih');
+    await t.tap(find.byKey(const ValueKey('tombol-tukar')));
+    await _tunggu(t);
+    expect(find.byKey(const ValueKey('banner-tukar')), findsOneWidget);
+    await _scanMasuk(t, '8990002'); // minyak 36.000
+    await t.pump(const Duration(milliseconds: 300));
+    // 36.000 − 2 × 4.000 = 28.000
+    expect(find.text(formatRupiah(28000)), findsWidgets);
+    expect(find.text('TOTAL BAYAR (TUKAR)'), findsOneWidget);
+    await _foto(t, '46-kasir-tukar-layar');
+    expect(s.app.pemulihan.muatTukar(), isNotNull, reason: 'tersimpan kalau listrik padam');
+    await t.sendKeyEvent(LogicalKeyboardKey.f12);
+    await _tunggu(t);
+    expect(find.text('Pembayaran tukar barang'), findsOneWidget);
+    await _foto(t, '47-kasir-tukar-bayar');
+    await t.enterText(find.descendant(of: find.byType(DialogBayar), matching: find.byType(TextField)), '30000');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await _tunggu(t);
+    expect(find.text('Tukar barang selesai'), findsOneWidget);
+    expect(find.text(formatRupiah(2000)), findsOneWidget);
+    expect(find.byKey(const ValueKey('banner-tukar')), findsNothing);
+    await _foto(t, '48-kasir-tukar-selesai');
+    final cetak = utf8.decode((s.app.printer as PrinterUji).riwayat.last, allowMalformed: true);
+    expect(cetak, contains('TUKAR BARANG'));
+    expect(cetak, contains(no));
+    expect(s.app.pemulihan.muatTukar(), isNull);
+    final ring = s.app.penjualan.ringkasanShift(s.app.shiftAktif!.id);
+    expect((ring.potonganTukar, ring.returTunai), (8000, 0));
+    s.app.keluar();
+  });
+
   testWidgets('buka shift berikutnya: modal awal terisi modal tetap (P)', (t) async {
     final s = await t.runAsync(_siapkanToko);
     s!.app.pengaturan.aturModalTetap(200000, cabangId: s.app.cabang.id, oleh: s.admin);

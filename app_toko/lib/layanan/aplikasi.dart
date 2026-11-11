@@ -146,6 +146,9 @@ class Aplikasi extends ChangeNotifier {
   Future<String?> cetakStrukTransaksi(DataStruk d, {bool ulang = false}) =>
       kirimKePrinter(cetakStruk(d, potongKertas: potongKertas), salinan: ulang ? 1 : salinanStruk);
 
+  /// Struk retur (RTR-…), selalu 1 salinan.
+  Future<String?> cetakRetur(DataStrukRetur d) => kirimKePrinter(cetakStrukRetur(d, potongKertas: potongKertas));
+
   // ---------------------------------------------------------------- cadangan
 
   /// Buat cadangan sekarang (VACUUM INTO, aman walau aplikasi sedang dipakai). Mengembalikan path file.

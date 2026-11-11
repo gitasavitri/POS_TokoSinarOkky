@@ -60,7 +60,7 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 |---|---|---|---|
 | Jual & cetak struk | Ya | Ya | Ya |
 | Beri diskon, batalkan transaksi | PIN SPV | Ya | Ya |
-| Terima retur | Tidak | Ya | Ya |
+| Tukar / kembalikan barang (retur) | Ya, ≤ 3 hari dari tanggal struk; lebih → PIN SPV | Ya | Ya |
 | Catat barang masuk, ubah harga jual & grosir lewat barang masuk | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: naik | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: turun >10% atau ≤ HPP | PIN SPV | Ya | Ya |
@@ -109,6 +109,18 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Kartu/transfer: wajib nomor referensi.
 - Pembatalan = baris di tabel `pembatalan` + `mutasi_stok` jenis `batal_jual` yang mengembalikan stok. Transaksi asli tidak diubah.
 - Tahan transaksi disimpan sementara di memori/tabel draft, bukan tabel `transaksi`.
+
+**Tukar / kembalikan barang (revisi F, 11 Nov 2026)**
+- Scan barcode nomor transaksi di struk. Hanya barang di transaksi itu; jumlah ≤ dibeli dikurangi yang sudah diretur (dijaga trigger).
+- Kasir boleh sendiri, tanpa batas nominal, sampai 3 hari kalender WIB dari tanggal struk; lewat → PIN SPV (`retur.disetujui_oleh`).
+- Uang retur selalu **tunai** dari uang kasir shift aktif (`retur.shift_id`), juga untuk transaksi QRIS/kartu/transfer.
+- Barang rusak: `retur_item.kembali_ke_stok = 0`, tidak ada `mutasi_stok`.
+- Nomor struk retur `RTR-<kode cabang>-<YYMMDD>-<urut 4 digit>`. Struk retur tanpa barcode.
+- Tukar barang = retur + transaksi baru dalam satu transaksi database: `retur.transaksi_tukar_id`, potongan di
+  `retur.dipotong` = `pembayaran.potongan_retur`. Pembeli membayar selisih; kalau nilai retur lebih besar, sisanya tunai.
+  Satu struk tukar. Transaksi tukar tidak bisa dibatalkan.
+- Semua retur oleh kasir muncul di "Perlu dicek" SPV/Admin + `log_aktivitas` (aksi `retur`).
+- Struk dan pesan bawah struk **tidak boleh** menulis aturan tukar/retur.
 
 **Struk**
 - Kertas 58 mm, 32 karakter per baris, dicetak dengan perintah ESC/POS.

@@ -322,6 +322,8 @@ class _InfoTokoState extends State<_InfoToko> {
             child: FilledButton(
               onPressed: () {
                 final app = context.app;
+                final galat = cekPesanStruk(_pesan.text);
+                if (galat != null) return tampilkanPesan(context, galat, galat: true);
                 app.pengaturan.ubahInfoCabang(
                   cabangId: c.id,
                   nama: _nama.text,

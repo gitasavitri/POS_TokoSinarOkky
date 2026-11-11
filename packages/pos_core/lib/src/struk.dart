@@ -34,6 +34,37 @@ class ItemStruk {
   int get subtotal => qty * hargaSatuan;
 }
 
+/// Barang yang dikembalikan pembeli (struk retur / bagian tukar di struk penjualan).
+class ItemStrukRetur {
+  const ItemStrukRetur({required this.nama, required this.qty, required this.hargaSatuan, this.rusak = false});
+
+  final String nama;
+  final int qty;
+  final int hargaSatuan;
+
+  /// Barang rusak: tidak masuk stok jual lagi.
+  final bool rusak;
+
+  int get subtotal => qty * hargaSatuan;
+}
+
+/// Bagian "tukar barang" di struk penjualan baru (revisi F): satu struk untuk barang kembali + belanja baru.
+class TukarStruk {
+  const TukarStruk({required this.noRetur, required this.noTransaksiAsal, required this.item, required this.potongan});
+
+  final String noRetur;
+  final String noTransaksiAsal;
+  final List<ItemStrukRetur> item;
+
+  /// Bagian nilai retur yang memotong belanja baru (≤ total belanja).
+  final int potongan;
+
+  int get nilaiRetur => item.fold(0, (s, i) => s + i.subtotal);
+
+  /// Nilai retur yang lebih besar dari belanja baru: dikembalikan tunai.
+  int get sisaDikembalikan => nilaiRetur - potongan;
+}
+
 class DataStruk {
   const DataStruk({
     required this.namaToko,
@@ -50,6 +81,7 @@ class DataStruk {
     this.pesanBawah = '',
     this.dibatalkan = false,
     this.cetakUlang = false,
+    this.tukar,
   });
 
   final String namaToko;
@@ -65,6 +97,41 @@ class DataStruk {
   final String? noReferensi;
   final String pesanBawah;
   final bool dibatalkan;
+  final bool cetakUlang;
+
+  /// Transaksi tukar barang: barang yang dikembalikan dan potongannya.
+  final TukarStruk? tukar;
+
+  /// Total belanja (harga barang baru).
+  int get total => item.fold(0, (s, i) => s + i.subtotal);
+
+  /// Yang dibayar pembeli: total belanja dikurangi potongan tukar.
+  int get totalBayar => total - (tukar?.potongan ?? 0);
+  int get jumlahBarang => item.fold(0, (s, i) => s + i.qty);
+}
+
+/// Struk retur (uang dikembalikan tunai). Nomor `RTR-…`. Tidak ada barcode dan tidak ada tulisan aturan retur.
+class DataStrukRetur {
+  const DataStrukRetur({
+    required this.namaToko,
+    required this.namaCabang,
+    required this.alamat,
+    required this.noRetur,
+    required this.noTransaksiAsal,
+    required this.waktu,
+    required this.namaKasir,
+    required this.item,
+    this.cetakUlang = false,
+  });
+
+  final String namaToko;
+  final String namaCabang;
+  final String alamat;
+  final String noRetur;
+  final String noTransaksiAsal;
+  final DateTime waktu;
+  final String namaKasir;
+  final List<ItemStrukRetur> item;
   final bool cetakUlang;
 
   int get total => item.fold(0, (s, i) => s + i.subtotal);
@@ -181,6 +248,7 @@ List<BarisStruk> susunStruk(DataStruk d) {
   if (d.alamat.isNotEmpty) tengah(d.alamat);
   if (d.cetakUlang) tengah('*** CETAK ULANG ***', tebal: true);
   if (d.dibatalkan) tengah('*** DIBATALKAN ***', tebal: true);
+  if (d.tukar != null) tengah('TUKAR BARANG', tebal: true);
   b.add(BarisStruk(garis()));
   b.add(BarisStruk(kiriKanan('No', d.noTransaksi)));
   b.add(BarisStruk(kiriKanan('Tgl', formatStruk(d.waktu))));
@@ -199,12 +267,28 @@ List<BarisStruk> susunStruk(DataStruk d) {
 
   b.add(BarisStruk(garis()));
   b.add(BarisStruk(kiriKanan('Jumlah barang', '${d.jumlahBarang}')));
-  b.add(BarisStruk(kiriKanan('TOTAL', formatAngka(d.total)), tebal: true, besar: true));
+  final t = d.tukar;
+  if (t == null) {
+    b.add(BarisStruk(kiriKanan('TOTAL', formatAngka(d.total)), tebal: true, besar: true));
+  } else {
+    b.add(BarisStruk(kiriKanan('Total belanja', formatAngka(d.total))));
+    b.add(BarisStruk(garis()));
+    b.add(const BarisStruk('BARANG DIKEMBALIKAN', tebal: true));
+    b.add(BarisStruk(kiriKanan('No retur', t.noRetur)));
+    b.add(BarisStruk(kiriKanan('Struk asal', t.noTransaksiAsal)));
+    _barisRetur(b, t.item);
+    b.add(BarisStruk(kiriKanan('Nilai barang kembali', '-${formatAngka(t.nilaiRetur)}')));
+    b.add(BarisStruk(garis()));
+    b.add(BarisStruk(kiriKanan('TOTAL BAYAR', formatAngka(d.totalBayar)), tebal: true, besar: true));
+  }
   b.add(
     BarisStruk(kiriKanan(d.metode == MetodeBayar.tunai ? 'Tunai' : d.metode.label, formatAngka(d.diterima))),
   );
   if (d.metode == MetodeBayar.tunai) {
     b.add(BarisStruk(kiriKanan('Kembali', formatAngka(d.kembalian))));
+  }
+  if (t != null && t.sisaDikembalikan > 0) {
+    b.add(BarisStruk(kiriKanan('Sisa tukar (tunai)', formatAngka(t.sisaDikembalikan)), tebal: true));
   }
   if (d.noReferensi != null && d.noReferensi!.isNotEmpty) {
     b.add(BarisStruk(kiriKanan('Ref', d.noReferensi!)));
@@ -213,6 +297,45 @@ List<BarisStruk> susunStruk(DataStruk d) {
   if (adaGrosir) tengah('*G = harga grosir');
   tengah('Terima kasih');
   if (d.pesanBawah.isNotEmpty) tengah(d.pesanBawah);
+  return b;
+}
+
+void _barisRetur(List<BarisStruk> b, List<ItemStrukRetur> item) {
+  for (final i in item) {
+    for (final l in bungkus(i.nama)) {
+      b.add(BarisStruk(l));
+    }
+    b.add(BarisStruk(kiriKanan('  ${i.qty} x ${formatAngka(i.hargaSatuan)}${i.rusak ? ' (rusak)' : ''}', '-${formatAngka(i.subtotal)}')));
+  }
+}
+
+/// Susun struk retur (uang dikembalikan tunai). Sengaja TIDAK menulis aturan tukar/retur (revisi F).
+List<BarisStruk> susunStrukRetur(DataStrukRetur d) {
+  final b = <BarisStruk>[];
+  void tengah(String s, {bool tebal = false, bool besar = false}) {
+    for (final l in bungkus(s)) {
+      b.add(BarisStruk(l, rata: Rata.tengah, tebal: tebal, besar: besar));
+    }
+  }
+
+  tengah(d.namaToko, tebal: true, besar: true);
+  if (d.namaCabang.isNotEmpty) tengah('Cabang ${d.namaCabang}');
+  if (d.alamat.isNotEmpty) tengah(d.alamat);
+  if (d.cetakUlang) tengah('*** CETAK ULANG ***', tebal: true);
+  tengah('STRUK RETUR', tebal: true);
+  b.add(BarisStruk(garis()));
+  b.add(BarisStruk(kiriKanan('No', d.noRetur)));
+  b.add(BarisStruk(kiriKanan('Struk asal', d.noTransaksiAsal)));
+  b.add(BarisStruk(kiriKanan('Tgl', formatStruk(d.waktu))));
+  b.add(BarisStruk(kiriKanan('Kasir', d.namaKasir)));
+  b.add(BarisStruk(garis()));
+  _barisRetur(b, d.item);
+  b.add(BarisStruk(garis()));
+  b.add(BarisStruk(kiriKanan('Jumlah barang', '${d.jumlahBarang}')));
+  b.add(BarisStruk(kiriKanan('DIKEMBALIKAN', formatAngka(d.total)), tebal: true, besar: true));
+  b.add(const BarisStruk('Uang dikembalikan tunai'));
+  b.add(BarisStruk(garis()));
+  tengah('Terima kasih');
   return b;
 }
 

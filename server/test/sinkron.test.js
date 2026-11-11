@@ -263,6 +263,32 @@ describe('Server Pusat', { skip: lewati }, () => {
     assert.equal(salahRentang.status, 400);
   });
 
+  test('tukar barang (revisi F): kolom retur baru tersimpan, tunai dikurangi potongan tukar', async () => {
+    const waktu = '2026-11-07T03:00:00Z';
+    const asal = penjualanContoh(B, { qty: 2, harga: 17500, waktu, no: 11 });
+    const baru = penjualanContoh(B, { qty: 3, harga: 17500, waktu: '2026-11-07T03:30:00Z', no: 12 });
+    // Bayar 3 × 17.500 − potongan 17.500 = 35.000 tunai.
+    const bayarBaru = { ...baru.bayar, jumlah_diterima: 35000, kembalian: 0, potongan_retur: 17500 };
+    const retur = {
+      id: crypto.randomUUID(), transaksi_id: asal.trx.id, alasan: 'Mau rasa lain', total_kembali: 17500, diproses_oleh: B.kasir.id,
+      created_at: '2026-11-07T03:30:00Z', cabang_id: B.cabang.id, no_retur: 'RTR-B02-261107-0001', shift_id: baru.shift.id,
+      disetujui_oleh: null, transaksi_tukar_id: baru.trx.id, dipotong: 17500,
+    };
+    const returItem = { id: crypto.randomUUID(), retur_id: retur.id, transaksi_item_id: asal.ti.id, qty: 1, kembali_ke_stok: 1 };
+    const kiriman = [...asal.item, ...baru.item.filter((x) => x.tabel !== 'pembayaran'), item('pembayaran', bayarBaru), item('retur', retur), item('retur_item', returItem)];
+    const r = await minta('POST', '/api/sinkron/kirim', { token: perangkat.B.token, isi: { item: kiriman } });
+    assert.deepEqual(r.isi.ditolak, []);
+    const [[tersimpan]] = await db.pool.query('SELECT no_retur, dipotong, transaksi_tukar_id FROM retur WHERE id = ?', [retur.id]);
+    assert.deepEqual({ ...tersimpan, dipotong: Number(tersimpan.dipotong) }, { no_retur: 'RTR-B02-261107-0001', dipotong: 17500, transaksi_tukar_id: baru.trx.id });
+
+    const q = '?dari=2026-11-06T17:00:00Z&sampai=2026-11-07T17:00:00Z';
+    const b = (await minta('GET', `/api/pusat/ringkasan${q}&cabang_id=${B.cabang.id}`, { token: tokenAdmin })).isi.per_cabang[0];
+    assert.equal(b.penjualan_bersih, 5 * 17500 - 17500);
+    assert.equal(b.tunai, 2 * 17500 + 35000, 'uang tunai yang benar-benar diterima');
+    assert.equal(b.non_tunai, 0);
+    assert.equal(b.total_retur, 17500);
+  });
+
   test('riwayat di server juga tidak bisa diubah', async () => {
     await assert.rejects(db.pool.query("UPDATE transaksi SET total = 1"), /tidak boleh diubah/);
     await assert.rejects(db.pool.query('DELETE FROM mutasi_stok'), /tidak boleh dihapus/);

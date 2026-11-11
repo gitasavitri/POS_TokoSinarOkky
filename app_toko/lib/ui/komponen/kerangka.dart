@@ -14,7 +14,7 @@ enum GrupAdmin { penjualan, barang, laporan }
 enum MenuAdmin {
   beranda('Menu', Icons.apps, GrupAdmin.penjualan, Warna.utama, Warna.utamaMuda),
   penjualan('Transaksi', Icons.point_of_sale, GrupAdmin.penjualan, Warna.utama, Color(0xFFDCEBFC)),
-  retur('Retur', Icons.assignment_return, GrupAdmin.penjualan, Warna.merahIkon, Warna.merahIkonMuda),
+  retur('Tukar / retur barang', Icons.assignment_return, GrupAdmin.penjualan, Warna.merahIkon, Warna.merahIkonMuda),
   shiftMenunggu('Shift menunggu dihitung', Icons.mark_email_unread, GrupAdmin.penjualan, Warna.oranyeTua, Warna.oranyeMuda),
   barangMasuk('Barang masuk', Icons.local_shipping, GrupAdmin.barang, Warna.toska, Warna.toskaMuda),
   ubahHarga('Ubah harga', Icons.sell, GrupAdmin.barang, Warna.coklat, Warna.coklatMuda),
@@ -43,12 +43,13 @@ typedef BukaMenu = void Function(MenuAdmin menu);
 /// Kelompok ikon di menu Kasir.
 enum GrupKasir { penjualan, barang, shift }
 
-/// Menu ikon Kasir (revisi B). Stok opname, laporan lengkap, log, karyawan, dan pengaturan printer tetap tidak ada.
+/// Menu ikon Kasir (revisi B, + tukar/kembalikan barang revisi F). Stok opname, laporan lengkap, log, karyawan, dan pengaturan printer tetap tidak ada.
 enum MenuKasir {
   beranda('Menu', Icons.apps, GrupKasir.penjualan, Warna.utama, Warna.utamaMuda),
   transaksi('Transaksi', Icons.point_of_sale, GrupKasir.penjualan, Warna.utama, Color(0xFFDCEBFC)),
   penjualanShift('Penjualan shift saya', Icons.receipt_long, GrupKasir.penjualan, Warna.hijauIkon, Warna.hijauIkonMuda),
   cetakUlang('Cetak ulang struk', Icons.print, GrupKasir.penjualan, Warna.abuIkon, Warna.abuIkonMuda),
+  retur('Tukar / kembalikan barang', Icons.assignment_return, GrupKasir.penjualan, Warna.merahIkon, Warna.merahIkonMuda),
   cekStok('Cek stok & harga', Icons.inventory_2, GrupKasir.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
   barangMasuk('Barang masuk', Icons.local_shipping, GrupKasir.barang, Warna.toska, Warna.toskaMuda),
   ubahHarga('Ubah harga', Icons.sell, GrupKasir.barang, Warna.coklat, Warna.coklatMuda),

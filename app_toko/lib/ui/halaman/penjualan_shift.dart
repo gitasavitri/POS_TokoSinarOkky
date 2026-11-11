@@ -13,7 +13,7 @@ class IsiPenjualanShift extends StatefulWidget {
   const IsiPenjualanShift({super.key, this.onIsiUlang});
 
   /// "Ubah transaksi" dari detail: barangnya dibawa ke layar Transaksi.
-  final ValueChanged<IsiUlang>? onIsiUlang;
+  final ValueChanged<KeTransaksi>? onIsiUlang;
   @override
   State<IsiPenjualanShift> createState() => _IsiPenjualanShiftState();
 }
@@ -57,7 +57,15 @@ class _IsiPenjualanShiftState extends State<IsiPenjualanShift> {
       Text('Shift dibuka ${formatLayar(r.shift.dibukaPada)}', style: const TextStyle(fontSize: 16, color: Warna.teksPudar)),
       const SizedBox(height: 12),
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: KartuAngka(label: 'Total penjualan', nilai: formatRupiah(r.penjualan), aksen: Warna.sukses, ikon: Icons.payments)),
+        Expanded(
+          child: KartuAngka(
+            label: 'Total penjualan',
+            nilai: formatRupiah(r.penjualan),
+            catatan: r.potonganTukar == 0 ? null : 'termasuk tukar barang ${formatRupiah(r.potonganTukar)}',
+            aksen: Warna.sukses,
+            ikon: Icons.payments,
+          ),
+        ),
         const SizedBox(width: 14),
         Expanded(child: KartuAngka(label: 'Tunai', nilai: formatRupiah(r.penjualanTunai), aksen: Warna.hijauIkon, ikon: Icons.money)),
         const SizedBox(width: 14),

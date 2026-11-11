@@ -125,18 +125,28 @@ class RingkasanShift {
     required this.returTunai,
     this.kasMasuk = 0,
     this.kasKeluar = 0,
+    this.potonganTukar = 0,
   });
 
   final Shift shift;
   final int jumlahTransaksi;
+
+  /// Uang tunai yang diterima dari penjualan (sudah dikurangi potongan tukar barang).
   final int penjualanTunai;
+
+  /// Uang non-tunai yang diterima (sudah dikurangi potongan tukar barang).
   final int penjualanNonTunai;
+
+  /// Uang tunai yang dikembalikan ke pembeli karena retur (bagian yang jadi potongan tukar tidak termasuk).
   final int returTunai;
   final int kasMasuk;
   final int kasKeluar;
 
-  /// Total penjualan (tunai + non-tunai). Boleh dilihat kasir.
-  int get penjualan => penjualanTunai + penjualanNonTunai;
+  /// Bagian belanja yang dibayar dengan barang tukaran (revisi F), bukan uang.
+  final int potonganTukar;
+
+  /// Total penjualan (tunai + non-tunai + potongan tukar). Boleh dilihat kasir.
+  int get penjualan => penjualanTunai + penjualanNonTunai + potonganTukar;
 
   /// Uang tunai yang seharusnya ada. JANGAN ditampilkan ke kasir sebelum ia menghitung (hitung buta).
   int get kasSistem => hitungKasSeharusnya(
@@ -255,6 +265,12 @@ class DetailTransaksi {
   final bool adaRetur;
   final String kasirId;
 
+  /// Transaksi ini hasil tukar barang (tidak bisa dibatalkan, revisi F).
+  bool get dariTukar => struk.tukar != null;
+
+  /// Masih ada barang yang bisa ditukar/dikembalikan.
+  bool get bisaRetur => !dibatalkan && item.any((i) => i.sudahRetur < i.qty);
+
   bool get dibatalkan => struk.dibatalkan;
   int get jumlahBarang => item.fold(0, (n, i) => n + i.qty);
   String get status => dibatalkan ? 'Dibatalkan' : (adaRetur ? 'Retur' : 'Lunas');
@@ -364,4 +380,119 @@ class DraftItemMasuk {
             TingkatGrosir(minQty: (t! as List<Object?>)[0]! as int, harga: t[1]! as int),
         ],
       );
+}
+
+// ------------------------------------------------------------------ tukar / kembalikan barang (revisi F)
+
+/// Satu barang di struk yang bisa diretur.
+class ItemRetur {
+  const ItemRetur({
+    required this.itemId,
+    required this.barangId,
+    required this.nama,
+    required this.qty,
+    required this.harga,
+    required this.sudahRetur,
+  });
+  final String itemId;
+  final String barangId;
+  final String nama;
+  final int qty;
+  final int harga;
+  final int sudahRetur;
+  int get sisa => sisaBolehRetur(dibeli: qty, sudahDiretur: sudahRetur);
+}
+
+/// Struk yang di-scan di layar tukar / kembalikan barang.
+class StrukUntukRetur {
+  const StrukUntukRetur({required this.id, required this.noTransaksi, required this.waktu, required this.dibatalkan, required this.item});
+  final String id;
+  final String noTransaksi;
+  final DateTime waktu;
+  final bool dibatalkan;
+  final List<ItemRetur> item;
+  bool get habis => item.every((i) => i.sisa == 0);
+}
+
+/// Barang yang dikembalikan pembeli untuk ditukar. Dibawa ke layar Transaksi; disimpan bersama transaksi baru.
+/// Sudah dicek (jumlah, alasan, batas hari / PIN SPV) saat dibuat lewat `PenjualanRepo.siapkanTukar`.
+class DraftTukar {
+  const DraftTukar({
+    required this.transaksiId,
+    required this.noTransaksiAsal,
+    required this.qtyPerItem,
+    required this.rusak,
+    required this.alasan,
+    required this.olehId,
+    required this.disetujuiOlehId,
+    required this.item,
+  });
+  final String transaksiId;
+  final String noTransaksiAsal;
+  final Map<String, int> qtyPerItem;
+
+  /// Id item yang rusak (tidak masuk stok jual).
+  final Set<String> rusak;
+  final String alasan;
+  final String olehId;
+  final String? disetujuiOlehId;
+
+  /// Untuk ditampilkan & dicetak.
+  final List<ItemStrukRetur> item;
+
+  int get nilai => item.fold(0, (s, i) => s + i.subtotal);
+  int get jumlahBarang => item.fold(0, (s, i) => s + i.qty);
+
+  Map<String, Object?> keJson() => {
+        'transaksi_id': transaksiId,
+        'qty': qtyPerItem,
+        'rusak': rusak.toList(),
+        'alasan': alasan,
+        'oleh_id': olehId,
+        'disetujui_oleh': disetujuiOlehId,
+      };
+}
+
+/// Hasil retur uang tunai.
+class HasilRetur {
+  const HasilRetur({required this.returId, required this.noRetur, required this.total, required this.struk});
+  final String returId;
+  final String noRetur;
+  final int total;
+  final DataStrukRetur struk;
+}
+
+/// Satu baris riwayat retur (SPV/Admin).
+class BarisRetur {
+  const BarisRetur({
+    required this.id,
+    required this.noRetur,
+    required this.noTransaksiAsal,
+    required this.waktu,
+    required this.oleh,
+    required this.olehKasir,
+    required this.penyetuju,
+    required this.total,
+    required this.dipotong,
+    required this.noTransaksiTukar,
+    required this.jumlahBarang,
+    required this.jumlahRusak,
+    required this.alasan,
+  });
+  final String id;
+  final String noRetur;
+  final String noTransaksiAsal;
+  final DateTime waktu;
+  final String oleh;
+  final bool olehKasir;
+  final String? penyetuju;
+  final int total;
+  final int dipotong;
+  final String? noTransaksiTukar;
+  final int jumlahBarang;
+  final int jumlahRusak;
+  final String alasan;
+
+  bool get tukar => noTransaksiTukar != null;
+  int get tunai => total - dipotong;
 }

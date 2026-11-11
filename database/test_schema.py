@@ -166,7 +166,8 @@ with db:
                (trx, cab_a, "TRX-A01-261101-0001", sh, kasir, 255000, 15, T0))
     db.execute("INSERT INTO transaksi_item VALUES (?,?,?,?,?,?,?,?,?)",
                (ti, trx, gula, "Gula Pasir 1 kg", 15, 17000, 1, 16200, 255000))
-    db.execute("INSERT INTO pembayaran VALUES (?,?,?,?,?,?,?)", (uid(), trx, "tunai", 300000, 45000, None, T0))
+    db.execute("INSERT INTO pembayaran (id, transaksi_id, metode, jumlah_diterima, kembalian, no_referensi, created_at)"
+               " VALUES (?,?,?,?,?,?,?)", (uid(), trx, "tunai", 300000, 45000, None, T0))
     db.execute("INSERT INTO mutasi_stok VALUES (?,?,?,?,?,?,?,?)", (uid(), cab_a, gula, -15, "jual", trx, kasir, T0))
 cek("stok setelah jual 15 = 30", stok() == 30)
 
@@ -177,7 +178,8 @@ harus_ditolak(db, "nomor transaksi dobel di cabang yang sama ditolak",
               "INSERT INTO transaksi VALUES (?,?,?,?,?,?,?,?)",
               (uid(), cab_a, "TRX-A01-261101-0001", sh, kasir, 1, 1, T0))
 harus_ditolak(db, "pembayaran kartu tanpa nomor referensi ditolak",
-              "INSERT INTO pembayaran VALUES (?,?,?,?,?,?,?)", (uid(), uid(), "kartu", 1, 0, None, T0))
+              "INSERT INTO pembayaran (id, transaksi_id, metode, jumlah_diterima, kembalian, no_referensi, created_at)"
+              " VALUES (?,?,?,?,?,?,?)", (uid(), uid(), "kartu", 1, 0, None, T0))
 harus_ditolak(db, "transaksi tidak bisa diubah", "UPDATE transaksi SET total = 0 WHERE id = ?", (trx,))
 harus_ditolak(db, "transaksi tidak bisa dihapus", "DELETE FROM transaksi WHERE id = ?", (trx,))
 harus_ditolak(db, "mutasi stok tidak bisa dihapus", "DELETE FROM mutasi_stok")
@@ -243,5 +245,41 @@ db.execute("INSERT INTO shift_tutup VALUES (?,?,?,?,?,?)", (sh2, 830000, 845000,
 cek("amplop dihitung belakangan → shift_tutup", db.execute("SELECT selisih FROM shift_tutup WHERE shift_id = ?", (sh2,)).fetchone()[0] == -15000)
 harus_ditolak(db, "shift yang sudah ditutup tidak bisa ditutup belum dihitung",
               "INSERT INTO shift_belum_dihitung VALUES (?,?,?,?,?,?,?)", (sh, cab_a, 1, 0, "x", kasir, T0))
+
+# Revisi F: tukar / kembalikan barang oleh kasir (migrasi 004)
+sh3 = uid()
+db.execute("INSERT INTO shift VALUES (?,?,?,?,?)", (sh3, cab_a, kasir, 100000, T0))
+RETUR = ("INSERT INTO retur (id, transaksi_id, alasan, total_kembali, diproses_oleh, created_at, cabang_id, no_retur,"
+         " shift_id, disetujui_oleh, transaksi_tukar_id, dipotong) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+def jual_baru(no, qty):
+    t, i = uid(), uid()
+    with db:
+        db.execute("INSERT INTO transaksi VALUES (?,?,?,?,?,?,?,?)", (t, cab_a, no, sh3, kasir, qty * 17500, qty, T0))
+        db.execute("INSERT INTO transaksi_item VALUES (?,?,?,?,?,?,?,?,?)", (i, t, gula, "Gula Pasir 1 kg", qty, 17500, 0, 16200, qty * 17500))
+    return t, i
+t1, i1 = jual_baru("TRX-A01-261101-0101", 2)
+r1 = uid()
+db.execute(RETUR, (r1, t1, "kemasan sobek", 17500, kasir, T0, cab_a, "RTR-A01-261101-0001", sh3, None, None, 0))
+db.execute("INSERT INTO retur_item VALUES (?,?,?,?,?)", (uid(), r1, i1, 1, 0))
+cek("kasir mencatat retur dengan nomor RTR", db.execute("SELECT no_retur FROM retur WHERE id = ?", (r1,)).fetchone()[0] == "RTR-A01-261101-0001")
+harus_ditolak(db, "jumlah retur melebihi yang dibeli ditolak",
+              "INSERT INTO retur_item VALUES (?,?,?,?,?)", (uid(), r1, i1, 2, 1))
+harus_ditolak(db, "nomor retur dobel di cabang yang sama ditolak", RETUR,
+              (uid(), t1, "x", 0, kasir, T0, cab_a, "RTR-A01-261101-0001", sh3, None, None, 0))
+harus_ditolak(db, "potongan tanpa transaksi tukar ditolak", RETUR,
+              (uid(), t1, "x", 17500, kasir, T0, cab_a, "RTR-A01-261101-0002", sh3, None, None, 1000))
+harus_ditolak(db, "retur transaksi yang dibatalkan ditolak", RETUR,
+              (uid(), trx, "x", 0, kasir, T0, cab_a, "RTR-A01-261101-0003", sh3, None, None, 0))
+t2, _ = jual_baru("TRX-A01-261101-0102", 1)
+harus_ditolak(db, "potongan lebih besar dari nilai retur ditolak", RETUR,
+              (uid(), t1, "x", 1000, kasir, T0, cab_a, "RTR-A01-261101-0004", sh3, None, t2, 2000))
+db.execute(RETUR, (uid(), t1, "tukar", 17500, kasir, T0, cab_a, "RTR-A01-261101-0005", sh3, None, t2, 17500))
+db.execute("INSERT INTO pembayaran (id, transaksi_id, metode, jumlah_diterima, kembalian, no_referensi, potongan_retur, created_at)"
+           " VALUES (?,?,?,?,?,?,?,?)", (uid(), t2, "tunai", 0, 0, None, 17500, T0))
+cek("pembayaran mencatat potongan tukar", db.execute("SELECT potongan_retur FROM pembayaran WHERE transaksi_id = ?", (t2,)).fetchone()[0] == 17500)
+harus_ditolak(db, "transaksi hasil tukar tidak bisa dibatalkan",
+              "INSERT INTO pembatalan VALUES (?,?,?,?,?)", (t2, "x", kasir, spv, T0))
+harus_ditolak(db, "satu transaksi tukar hanya untuk satu retur", RETUR,
+              (uid(), t1, "x", 0, kasir, T0, cab_a, "RTR-A01-261101-0006", sh3, None, t2, 0))
 
 print(f"\nSemua {lulus} pengujian lulus.")

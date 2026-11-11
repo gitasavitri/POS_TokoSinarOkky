@@ -90,8 +90,8 @@ class _AlurKasir extends StatefulWidget {
 class _AlurKasirState extends State<_AlurKasir> {
   MenuKasir _menu = MenuKasir.beranda;
 
-  /// Barang dari "Ubah transaksi" yang dibawa ke layar Transaksi.
-  IsiUlang? _isi;
+  /// Barang dari "Ubah transaksi" / tukar barang yang dibawa ke layar Transaksi.
+  KeTransaksi? _isi;
   int _kunciTransaksi = 0;
 
   @override
@@ -123,7 +123,7 @@ class _AlurKasirState extends State<_AlurKasir> {
     }
   }
 
-  void _keTransaksi(IsiUlang isi) => setState(() {
+  void _keTransaksi(KeTransaksi isi) => setState(() {
         _isi = isi;
         _kunciTransaksi++;
         _menu = MenuKasir.transaksi;
@@ -158,6 +158,7 @@ class _AlurKasirState extends State<_AlurKasir> {
     final isi = switch (_menu) {
       MenuKasir.penjualanShift => IsiPenjualanShift(onIsiUlang: _keTransaksi),
       MenuKasir.cetakUlang => IsiCetakUlang(onIsiUlang: _keTransaksi),
+      MenuKasir.retur => IsiRetur(onTukar: (d) => _keTransaksi(KeTransaksi.tukar(d))),
       MenuKasir.cekStok => const IsiCekStok(),
       MenuKasir.barangMasuk => const IsiBarangMasuk(),
       MenuKasir.ubahHarga => const IsiUbahHarga(),
@@ -215,12 +216,21 @@ class HalamanAdmin extends StatefulWidget {
 class _HalamanAdminState extends State<HalamanAdmin> {
   MenuAdmin _menu = MenuAdmin.beranda;
 
-  void _buka(MenuAdmin m) => setState(() => _menu = m);
+  /// Tukar barang dari menu Tukar / retur: dibawa ke layar Transaksi.
+  KeTransaksi? _isi;
+  int _kunci = 0;
+
+  void _buka(MenuAdmin m) => setState(() {
+        _menu = m;
+        _isi = null;
+      });
 
   @override
   Widget build(BuildContext context) {
     if (_menu == MenuAdmin.penjualan) {
       return HalamanKasir(
+        key: ValueKey('penjualan-$_kunci'),
+        isiAwal: _isi,
         onKembaliKeMenu: () => _buka(MenuAdmin.beranda),
         onBukaBarangMasuk: () => _buka(MenuAdmin.barangMasuk),
         onBukaUbahHarga: () => _buka(MenuAdmin.ubahHarga),
@@ -234,7 +244,13 @@ class _HalamanAdminState extends State<HalamanAdmin> {
       MenuAdmin.ubahHarga => const IsiUbahHarga(),
       MenuAdmin.koreksi => const IsiKoreksi(),
       MenuAdmin.produk => const IsiProduk(),
-      MenuAdmin.retur => const IsiRetur(),
+      MenuAdmin.retur => IsiRetur(
+          onTukar: (d) => setState(() {
+            _isi = KeTransaksi.tukar(d);
+            _kunci++;
+            _menu = MenuAdmin.penjualan;
+          }),
+        ),
       MenuAdmin.shiftMenunggu => const IsiShiftMenunggu(),
       MenuAdmin.laporan => const IsiLaporan(),
       MenuAdmin.log => const IsiLog(),

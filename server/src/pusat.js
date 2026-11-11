@@ -198,7 +198,9 @@ export async function ringkasan(kon, q) {
   const fc = filterCabang(q);
   const jual = await pilih(
     kon,
-    "SELECT t.cabang_id, COUNT(*) AS n, IFNULL(SUM(t.total), 0) AS total, IFNULL(SUM(CASE WHEN p.metode = 'tunai' THEN t.total ELSE 0 END), 0) AS tunai" +
+    // tunai / non_tunai = uang yang diterima lewat cara bayar itu (dikurangi potongan tukar barang, revisi F).
+    "SELECT t.cabang_id, COUNT(*) AS n, IFNULL(SUM(t.total), 0) AS total, IFNULL(SUM(p.potongan_retur), 0) AS potongan," +
+      " IFNULL(SUM(CASE WHEN p.metode = 'tunai' THEN t.total - p.potongan_retur ELSE 0 END), 0) AS tunai" +
       ` FROM transaksi t JOIN pembayaran p ON p.transaksi_id = t.id WHERE t.created_at >= ? AND t.created_at < ? AND ${BUKAN_BATAL}${fc.sql}` +
       ' GROUP BY t.cabang_id',
     [dari, sampai, ...fc.param],
@@ -233,7 +235,7 @@ export async function ringkasan(kon, q) {
   const baris = cabang
     .filter((c) => !fc.param.length || c.id === fc.param[0])
     .map((c) => {
-      const j = per(jual, c.id) ?? { n: 0, total: 0, tunai: 0 };
+      const j = per(jual, c.id) ?? { n: 0, total: 0, tunai: 0, potongan: 0 };
       const r = per(retur, c.id) ?? { total: 0, laba: 0 };
       return {
         cabang_id: c.id,
@@ -242,7 +244,7 @@ export async function ringkasan(kon, q) {
         penjualan_bersih: j.total - r.total,
         jumlah_transaksi: j.n,
         tunai: j.tunai,
-        non_tunai: j.total - j.tunai,
+        non_tunai: j.total - j.potongan - j.tunai,
         laba_kotor: (per(laba, c.id)?.laba ?? 0) - r.laba,
         jumlah_batal: per(batal, c.id)?.n ?? 0,
         total_retur: r.total,

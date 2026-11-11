@@ -46,8 +46,9 @@ class LaporanRepo {
   Ringkasan ringkasan(String cabangId, DateTime dari, DateTime sampai) {
     final a = isoUtc(dari), b = isoUtc(sampai);
     final r = _db.satu(
-      "SELECT COUNT(*) AS n, IFNULL(SUM(t.total), 0) AS total,"
-      " IFNULL(SUM(CASE WHEN p.metode = 'tunai' THEN t.total ELSE 0 END), 0) AS tunai"
+      // tunai / non-tunai = uang yang diterima lewat cara bayar itu (dikurangi potongan tukar barang, revisi F).
+      "SELECT COUNT(*) AS n, IFNULL(SUM(t.total), 0) AS total, IFNULL(SUM(p.potongan_retur), 0) AS potongan,"
+      " IFNULL(SUM(CASE WHEN p.metode = 'tunai' THEN t.total - p.potongan_retur ELSE 0 END), 0) AS tunai"
       ' FROM transaksi t JOIN pembayaran p ON p.transaksi_id = t.id'
       ' LEFT JOIN pembatalan x ON x.transaksi_id = t.id'
       ' WHERE t.cabang_id = ? AND t.created_at >= ? AND t.created_at < ? AND x.transaksi_id IS NULL',
@@ -77,7 +78,7 @@ class LaporanRepo {
       penjualanBersih: total - totalRetur,
       jumlahTransaksi: r['n']! as int,
       tunai: tunai,
-      nonTunai: total - tunai,
+      nonTunai: total - (r['potongan']! as int) - tunai,
       labaKotor: laba - (retur['laba']! as int),
       jumlahBatal: batal,
       totalRetur: totalRetur,
@@ -180,8 +181,9 @@ class LaporanRepo {
           ))
       .toList();
 
-  /// Hal yang perlu dicek SPV/Admin: pembatalan, akun terkunci, koreksi menunggu, perubahan harga, selisih kas.
-  ({int batal, int terkunci, int koreksiMenunggu, int ubahHarga, int selisihKas, int shiftMenunggu}) perluDicek(
+  /// Hal yang perlu dicek SPV/Admin: pembatalan, akun terkunci, koreksi menunggu, perubahan harga, selisih kas,
+  /// shift menunggu dihitung, retur/tukar yang diproses kasir (revisi F).
+  ({int batal, int terkunci, int koreksiMenunggu, int ubahHarga, int selisihKas, int shiftMenunggu, int returKasir}) perluDicek(
       String cabangId, DateTime dari, DateTime sampai) {
     int n(String sql, List<Object?> p) => _db.satu(sql, p)!['n']! as int;
     final a = isoUtc(dari), b = isoUtc(sampai);
@@ -207,6 +209,10 @@ class LaporanRepo {
           'SELECT COUNT(*) AS n FROM shift_belum_dihitung b LEFT JOIN shift_tutup t ON t.shift_id = b.shift_id'
           ' WHERE b.cabang_id = ? AND t.shift_id IS NULL',
           [cabangId]),
+      returKasir: n(
+          "SELECT COUNT(*) AS n FROM retur r JOIN transaksi t ON t.id = r.transaksi_id JOIN pengguna u ON u.id = r.diproses_oleh"
+          " WHERE t.cabang_id = ? AND u.peran = 'kasir' AND r.created_at >= ? AND r.created_at < ?",
+          [cabangId, a, b]),
     );
   }
 

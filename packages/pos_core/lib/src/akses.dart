@@ -68,11 +68,12 @@ Akses aksesUntuk(Peran peran, Izin izin) {
         case Izin.ubahHargaNaik:
         case Izin.mintaKoreksiBarangMasuk:
         case Izin.lihatStok:
+        // Revisi F: kasir boleh tukar/retur sendiri; batas 3 hari dicek lewat aksesRetur (retur.dart).
+        case Izin.terimaRetur:
           return Akses.ya;
         case Izin.batalTransaksi:
         case Izin.ubahHargaTurunBesar:
           return Akses.pinSpv;
-        case Izin.terimaRetur:
         case Izin.setujuiKoreksiBarangMasuk:
         case Izin.stokOpname:
         case Izin.lihatLaporan:

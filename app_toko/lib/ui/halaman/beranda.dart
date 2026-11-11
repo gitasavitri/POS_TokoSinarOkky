@@ -45,6 +45,8 @@ class MenuBeranda extends StatelessWidget {
       if (cek.shiftMenunggu > 0)
         itemCek('${cek.shiftMenunggu} shift menunggu dihitung', 'Amplop uang belum dihitung · isi hasilnya', penting: true, ke: MenuAdmin.shiftMenunggu),
       if (cek.batal > 0) itemCek('${cek.batal} transaksi dibatalkan', 'Lihat di Log aktivitas', penting: true, ke: MenuAdmin.log),
+      if (cek.returKasir > 0)
+        itemCek('${cek.returKasir} tukar / retur oleh kasir', 'Cek barang & uangnya · buka Tukar / retur barang', penting: true, ke: MenuAdmin.retur),
       if (cek.terkunci > 0 && MenuAdmin.karyawan.bolehUntuk(p.peran))
         itemCek('${cek.terkunci} akun terkunci', 'Salah PIN 5 kali · buka di Karyawan', penting: true, ke: MenuAdmin.karyawan),
       if (cek.koreksiMenunggu > 0) itemCek('${cek.koreksiMenunggu} koreksi barang masuk', 'Menunggu persetujuan', penting: false, ke: MenuAdmin.koreksi),
@@ -69,6 +71,7 @@ class MenuBeranda extends StatelessWidget {
               ubin(m,
                   lencana: switch (m) {
                     MenuAdmin.koreksi when cek.koreksiMenunggu > 0 => '${cek.koreksiMenunggu}',
+                    MenuAdmin.retur when cek.returKasir > 0 => '${cek.returKasir}',
                     MenuAdmin.shiftMenunggu when cek.shiftMenunggu > 0 => '${cek.shiftMenunggu}',
                     MenuAdmin.produk when menipis > 0 => '$menipis menipis',
                     MenuAdmin.ubahHarga when antreanLabel > 0 => '$antreanLabel label',

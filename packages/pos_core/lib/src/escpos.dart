@@ -121,6 +121,10 @@ Uint8List cetakBaris(
 Uint8List cetakStruk(DataStruk d, {bool potongKertas = false}) =>
     cetakBaris(susunStruk(d), barcode: isiBarcodeStruk(d.noTransaksi), potongKertas: potongKertas);
 
+/// Struk retur → byte printer (tanpa barcode).
+Uint8List cetakStrukRetur(DataStrukRetur d, {bool potongKertas = false}) =>
+    cetakBaris(susunStrukRetur(d), potongKertas: potongKertas);
+
 /// Struk tes dari halaman Pengaturan printer.
 Uint8List cetakTes({required String namaToko, required String namaCabang, bool potongKertas = false}) {
   final baris = <BarisStruk>[

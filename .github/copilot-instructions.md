@@ -59,7 +59,7 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 |---|---|---|---|
 | Jual & cetak struk | Ya | Ya | Ya |
 | Beri diskon, batalkan transaksi | PIN SPV | Ya | Ya |
-| Terima retur | Tidak | Ya | Ya |
+| Tukar / kembalikan barang (retur) | Ya, ≤ 3 hari dari tanggal struk; lebih → PIN SPV | Ya | Ya |
 | Catat barang masuk, ubah harga jual & grosir lewat barang masuk | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: naik | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: turun >10% atau ≤ HPP | PIN SPV | Ya | Ya |

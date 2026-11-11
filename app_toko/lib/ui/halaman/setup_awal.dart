@@ -19,7 +19,7 @@ class _HalamanSetupAwalState extends State<HalamanSetupAwal> {
   final _kode = TextEditingController();
   final _namaCabang = TextEditingController();
   final _alamat = TextEditingController();
-  final _pesan = TextEditingController(text: 'Barang yang sudah dibeli tidak dapat dikembalikan');
+  final _pesan = TextEditingController();
   final _namaAdmin = TextEditingController();
   final _user = TextEditingController();
   final _sandi = TextEditingController();
@@ -115,7 +115,7 @@ class _HalamanSetupAwalState extends State<HalamanSetupAwal> {
                             cek: (v) => RegExp(r'^[A-Za-z0-9]{2,6}$').hasMatch(v ?? '') ? null : '2–6 huruf/angka, contoh A01'),
                         isian('Nama cabang', _namaCabang, hint: 'contoh: Buah Batu'),
                         isian('Alamat', _alamat, cek: (_) => null),
-                        isian('Pesan di bawah struk', _pesan, cek: (_) => null),
+                        isian('Pesan di bawah struk', _pesan, hint: 'boleh kosong, mis. jam buka toko', cek: (v) => cekPesanStruk(v ?? '')),
                       ]),
                     ),
                   ),

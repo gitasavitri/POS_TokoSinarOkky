@@ -6,12 +6,21 @@ import '../../layanan/aplikasi.dart';
 import '../komponen/pin.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
+import 'retur.dart';
 
 /// Barang dari transaksi yang dibatalkan untuk dibuat ulang di layar Transaksi ("ubah transaksi", revisi E).
 typedef IsiUlang = List<({String barangId, int qty})>;
 
+/// Lanjut ke layar Transaksi dari riwayat/detail: "ubah transaksi" ([isiUlang]) atau tukar barang ([tukar], revisi F).
+class KeTransaksi {
+  const KeTransaksi.isiUlang(IsiUlang this.isiUlang) : tukar = null;
+  const KeTransaksi.tukar(DraftTukar this.tukar) : isiUlang = null;
+  final IsiUlang? isiUlang;
+  final DraftTukar? tukar;
+}
+
 /// Daftar transaksi hari ini dari layar kasir (F9): klik untuk detail, cetak ulang, batalkan.
-/// Mengembalikan [IsiUlang] kalau kasir memilih "Ubah transaksi".
+/// Mengembalikan [KeTransaksi] kalau kasir memilih "Ubah transaksi" atau "Tukar barang".
 class DialogTransaksiTerakhir extends StatefulWidget {
   const DialogTransaksiTerakhir({super.key});
   @override
@@ -33,7 +42,7 @@ class _DialogTransaksiTerakhirState extends State<DialogTransaksiTerakhir> {
 class DaftarRiwayatTransaksi extends StatefulWidget {
   const DaftarRiwayatTransaksi({super.key, this.bisaIsiUlang = false, this.onIsiUlang});
   final bool bisaIsiUlang;
-  final ValueChanged<IsiUlang>? onIsiUlang;
+  final ValueChanged<KeTransaksi>? onIsiUlang;
   @override
   State<DaftarRiwayatTransaksi> createState() => _DaftarRiwayatTransaksiState();
 }
@@ -139,7 +148,7 @@ class _DaftarRiwayatTransaksiState extends State<DaftarRiwayatTransaksi> {
 /// Menu kasir "Cetak ulang struk": cari lewat barcode struk / nomor, atau pilih dari transaksi hari ini.
 class IsiCetakUlang extends StatelessWidget {
   const IsiCetakUlang({super.key, this.onIsiUlang});
-  final ValueChanged<IsiUlang>? onIsiUlang;
+  final ValueChanged<KeTransaksi>? onIsiUlang;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
@@ -148,9 +157,10 @@ class IsiCetakUlang extends StatelessWidget {
 }
 
 /// Detail satu transaksi dalam bentuk daftar belanja seperti layar kasir (revisi E):
-/// Cetak ulang, Tukar/kembalikan barang (menyusul, revisi F), Batalkan (PIN SPV), Ubah transaksi.
-/// [bisaIsiUlang]: tampilkan "Ubah transaksi" (batalkan + barangnya dimasukkan lagi ke layar Transaksi).
-Future<IsiUlang?> bukaDetailTransaksi(BuildContext context, String transaksiId, {bool bisaIsiUlang = false}) => showDialog<IsiUlang>(
+/// Cetak ulang, Tukar/kembalikan barang (revisi F), Batalkan (PIN SPV), Ubah transaksi.
+/// [bisaIsiUlang]: tampilkan "Ubah transaksi" (batalkan + barangnya dimasukkan lagi ke layar Transaksi)
+/// dan tombol Tukar barang di dialog retur (barangnya dibawa ke layar Transaksi).
+Future<KeTransaksi?> bukaDetailTransaksi(BuildContext context, String transaksiId, {bool bisaIsiUlang = false}) => showDialog<KeTransaksi>(
   context: context,
   builder: (_) => DialogDetailTransaksi(transaksiId: transaksiId, bisaIsiUlang: bisaIsiUlang),
 );
@@ -216,7 +226,7 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
     if (!mounted) return;
     if (isiUlang) {
       tampilkanPesan(context, 'Transaksi ${d.struk.noTransaksi} dibatalkan. Barangnya sudah di layar Transaksi.');
-      Navigator.pop(context, [for (final i in d.item) (barangId: i.barangId, qty: i.qty)]);
+      Navigator.pop(context, KeTransaksi.isiUlang([for (final i in d.item) (barangId: i.barangId, qty: i.qty)]));
       return;
     }
     tampilkanPesan(context, 'Transaksi dibatalkan. Stok sudah dikembalikan.');
@@ -256,6 +266,17 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
         ],
       ),
     );
+  }
+
+  /// Tukar / kembalikan barang (revisi F). Uang tunai: selesai di dialog retur. Tukar: dibawa ke layar Transaksi.
+  Future<void> _retur() async {
+    final tukar = await bukaDialogRetur(context, widget.transaksiId, bisaTukar: widget.bisaIsiUlang);
+    if (!mounted) return;
+    if (tukar != null) {
+      Navigator.pop(context, KeTransaksi.tukar(tukar));
+      return;
+    }
+    _muat();
   }
 
   Future<void> _cetakUlang() async {
@@ -312,7 +333,7 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
     final app = context.app;
     final s = d.struk;
     final aksesBatal = app.akses(Izin.batalTransaksi);
-    final bolehBatal = !d.dibatalkan && !d.adaRetur && aksesBatal != Akses.tidak;
+    final bolehBatal = !d.dibatalkan && !d.adaRetur && !d.dariTukar && aksesBatal != Akses.tidak;
     final pin = aksesBatal == Akses.pinSpv ? ' (PIN SPV)' : '';
     const gayaKepala = TextStyle(fontSize: 13.5, letterSpacing: 0.6, fontWeight: FontWeight.w800, color: Warna.utamaTua);
     return AlertDialog(
@@ -348,7 +369,15 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
               const SizedBox(height: 10),
             ],
             if (d.adaRetur) ...[
-              const KotakPesan('Sebagian barang sudah diretur, jadi transaksi ini tidak bisa dibatalkan.', jenis: JenisPesan.perhatian),
+              const KotakPesan('Sebagian barang sudah dikembalikan, jadi transaksi ini tidak bisa dibatalkan.', jenis: JenisPesan.perhatian),
+              const SizedBox(height: 10),
+            ],
+            if (d.dariTukar) ...[
+              KotakPesan(
+                'Transaksi tukar barang: ${formatAngka(s.tukar!.item.fold(0, (n, i) => n + i.qty))} barang dari ${s.tukar!.noTransaksiAsal} '
+                '(${s.tukar!.noRetur}) memotong ${formatRupiah(s.tukar!.potongan)}. Tidak bisa dibatalkan; kalau salah, retur barangnya.',
+                jenis: JenisPesan.info,
+              ),
               const SizedBox(height: 10),
             ],
             Expanded(
@@ -464,7 +493,11 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              _ringkas('TOTAL', formatRupiah(s.total), besar: true),
+                              if (s.tukar != null) ...[
+                                _ringkas('Total belanja', formatRupiah(s.total)),
+                                _ringkas('Barang dikembalikan', '−${formatRupiah(s.tukar!.nilaiRetur)}', warna: Warna.merah),
+                              ],
+                              _ringkas(s.tukar != null ? 'TOTAL BAYAR' : 'TOTAL', formatRupiah(s.totalBayar), besar: true),
                               if (s.metode == MetodeBayar.tunai) ...[
                                 _ringkas('Tunai diterima', formatRupiah(s.diterima)),
                                 _ringkas('Kembali', formatRupiah(s.kembalian), warna: Warna.suksesTua),
@@ -504,10 +537,12 @@ class _DialogDetailTransaksiState extends State<DialogDetailTransaksi> {
                   onPressed: _sibuk ? null : () => _batalkan(isiUlang: true),
                   child: Text('Ubah transaksi$pin'),
                 ),
-              if (!d.dibatalkan)
-                const Tooltip(
-                  message: 'Fitur tukar / kembalikan barang menyusul (revisi F).',
-                  child: OutlinedButton(onPressed: null, child: Text('Tukar / kembalikan')),
+              if (d.bisaRetur && app.akses(Izin.terimaRetur) != Akses.tidak)
+                OutlinedButton.icon(
+                  key: const ValueKey('tukar-kembalikan'),
+                  onPressed: _sibuk ? null : _retur,
+                  icon: const Icon(Icons.assignment_return),
+                  label: const Text('Tukar / kembalikan'),
                 ),
               const Spacer(),
               OutlinedButton.icon(
