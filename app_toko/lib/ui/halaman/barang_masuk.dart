@@ -571,18 +571,24 @@ class _FormItemState extends State<_FormItem> {
               Text('${k + 1}', style: const TextStyle(fontSize: 12, color: Warna.teksPudar)),
             ]),
             const SizedBox(height: 4),
-            anak,
+            SizedBox(height: _tinggiKotak, child: anak),
           ]),
         ),
       );
 
-  static const _tinggiKotak = BoxConstraints.tightFor(height: 46);
-  static const _padatan = InputDecoration(isDense: true, constraints: _tinggiKotak, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 0));
+  static const _tinggiKotak = 44.0;
+  static final _padatan = InputDecoration(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    border: kotakPadat(Warna.garisInput),
+    enabledBorder: kotakPadat(Warna.garisInput),
+    focusedBorder: kotakPadat(Warna.utama, 3),
+  );
 
   Widget _pilihan(int k, String? nilai, List<(String, String)> opsi, ValueChanged<String> ubah) => ListenableBuilder(
         listenable: _fokus[k],
         builder: (_, _) => InputDecorator(
           isFocused: _fokus[k].hasFocus,
+          expands: true,
           decoration: _padatan,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -637,6 +643,9 @@ class _FormItemState extends State<_FormItem> {
                     controller: _barcode,
                     focusNode: _fokus[_kBarcode],
                     style: const TextStyle(fontSize: 18),
+                    expands: true,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.center,
                     decoration: _padatan.copyWith(hintText: 'Scan / ketik (boleh kosong)'),
                     onChanged: (v) => _ubah(() => it.barcode = v.trim()),
                     onEditingComplete: () {},
@@ -652,6 +661,9 @@ class _FormItemState extends State<_FormItem> {
                     controller: _nama,
                     focusNode: _fokus[_kNama],
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    expands: true,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.center,
                     decoration: _padatan.copyWith(hintText: 'contoh: Gula Pasir 1 kg'),
                     onChanged: (v) => _ubah(() => it.nama = v),
                     onEditingComplete: () {},
@@ -681,6 +693,9 @@ class _FormItemState extends State<_FormItem> {
                     inputFormatters: [FormatRibuan()],
                     textAlign: TextAlign.right,
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    expands: true,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.center,
                     decoration: _padatan.copyWith(hintText: '0'),
                     onChanged: (v) => _ubah(() => it.jumlah = bacaAngka(v)),
                     onEditingComplete: () {},
@@ -782,21 +797,24 @@ class _FormItemState extends State<_FormItem> {
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           Expanded(
             flex: 2,
-            child: TextField(
+            child: SizedBox(height: _tinggiKotak, child: TextField(
               key: ValueKey('grosir-min-$i'),
               controller: _grosir[i].$1,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              expands: true,
+              maxLines: null,
+              textAlignVertical: TextAlignVertical.center,
               decoration: _padatan.copyWith(hintText: 'min'),
               onChanged: (_) => _simpanGrosir(),
-            ),
+            )),
           ),
           const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('→', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
           Expanded(
             flex: 3,
-            child: InputRupiah(key: ValueKey('grosir-harga-$i'), padat: true, controller: _grosir[i].$2, onChanged: (_) => _simpanGrosir()),
+            child: SizedBox(height: _tinggiKotak, child: InputRupiah(key: ValueKey('grosir-harga-$i'), padat: true, controller: _grosir[i].$2, onChanged: (_) => _simpanGrosir())),
           ),
         ]),
         if (salahGrosir[i] != null)

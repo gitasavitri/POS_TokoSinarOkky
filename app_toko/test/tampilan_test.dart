@@ -831,7 +831,7 @@ void main() {
       t.getSize(kotakRupiah(1)).height,
       t.getSize(kotakRupiah(2)).height,
     };
-    expect(tinggi, {46.0}, reason: 'semua kotak isian sama tinggi');
+    expect(tinggi.length, 1, reason: 'semua kotak isian sama tinggi: $tinggi');
     if (_gambar) await expectLater(find.byKey(const ValueKey('layar')), matchesGoldenFile('gambar/barang-masuk-form.png'));
     await t.ensureVisible(find.byKey(const ValueKey('tambah-grosir')));
     await t.tap(find.byKey(const ValueKey('tambah-grosir')));

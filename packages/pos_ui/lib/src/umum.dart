@@ -211,6 +211,10 @@ class FormatRibuan extends TextInputFormatter {
 }
 
 /// Isian rupiah besar dengan awalan "Rp".
+/// Garis kotak persegi (sudut hampir lurus) untuk formulir padat.
+OutlineInputBorder kotakPadat(Color warna, [double lebar = 2]) =>
+    OutlineInputBorder(borderRadius: BorderRadius.circular(3), borderSide: BorderSide(color: warna, width: lebar));
+
 class InputRupiah extends StatelessWidget {
   const InputRupiah({
     super.key,
@@ -230,7 +234,7 @@ class InputRupiah extends StatelessWidget {
   final String? label;
   final bool besar;
 
-  /// Tinggi tetap 46 px, huruf 18: sama dengan kotak isian lain di formulir padat.
+  /// Huruf 18, kotak persegi: sama dengan kotak isian lain di formulir padat.
   final bool padat;
   final bool autofocus;
   final ValueChanged<int>? onChanged;
@@ -254,6 +258,9 @@ class InputRupiah extends StatelessWidget {
       keyboardType: TextInputType.number,
       inputFormatters: [FormatRibuan()],
       textAlign: TextAlign.right,
+      expands: padat,
+      maxLines: padat ? null : 1,
+      textAlignVertical: padat ? TextAlignVertical.center : null,
       style: TextStyle(fontSize: ukuran, fontWeight: FontWeight.w800),
       decoration: InputDecoration(
         labelText: label,
@@ -261,12 +268,10 @@ class InputRupiah extends StatelessWidget {
         prefixText: 'Rp  ',
         prefixStyle: TextStyle(fontSize: padat ? 14 : ukuran * 0.75, fontWeight: FontWeight.w800, color: Warna.teks2),
         hintText: '0',
-        isDense: padat ? true : null,
-        constraints: padat ? const BoxConstraints.tightFor(height: 46) : null,
         contentPadding: padat ? const EdgeInsets.symmetric(horizontal: 12) : null,
         fillColor: tegas ? const Color(0xFFFFF8EC) : Colors.white,
-        enabledBorder: garis,
-        focusedBorder: garis,
+        enabledBorder: padat ? (garis ?? kotakPadat(Warna.garisInput)) : garis,
+        focusedBorder: padat ? (garis ?? kotakPadat(Warna.utama, 3)) : garis,
       ),
       onChanged: onChanged == null ? null : (s) => onChanged!(bacaAngka(s)),
       onSubmitted: onSubmitted == null ? null : (s) => onSubmitted!(bacaAngka(s)),
