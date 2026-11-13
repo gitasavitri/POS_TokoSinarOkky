@@ -70,6 +70,8 @@ class DataStruk {
     required this.namaToko,
     required this.namaCabang,
     required this.alamat,
+    this.telepon = '',
+    this.tambahan = '',
     required this.noTransaksi,
     required this.waktu,
     required this.namaKasir,
@@ -87,6 +89,12 @@ class DataStruk {
   final String namaToko;
   final String namaCabang;
   final String alamat;
+
+  /// Opsional: dicetak sebagai `Telp <nomor>` di bawah alamat.
+  final String telepon;
+
+  /// Opsional: tulisan bebas di kepala struk, satu baris per baris ketikan.
+  final String tambahan;
   final String noTransaksi;
   final DateTime waktu;
   final String namaKasir;
@@ -116,6 +124,8 @@ class DataStrukRetur {
     required this.namaToko,
     required this.namaCabang,
     required this.alamat,
+    this.telepon = '',
+    this.tambahan = '',
     required this.noRetur,
     required this.noTransaksiAsal,
     required this.waktu,
@@ -127,6 +137,8 @@ class DataStrukRetur {
   final String namaToko;
   final String namaCabang;
   final String alamat;
+  final String telepon;
+  final String tambahan;
   final String noRetur;
   final String noTransaksiAsal;
   final DateTime waktu;
@@ -244,8 +256,12 @@ List<BarisStruk> susunStruk(DataStruk d) {
   }
 
   tengah(d.namaToko, tebal: true, besar: true);
-  if (d.namaCabang.isNotEmpty) tengah('Cabang ${d.namaCabang}');
+  // Nama cabang sengaja tidak dicetak (nomor struk sudah memuat kode cabang).
   if (d.alamat.isNotEmpty) tengah(d.alamat);
+  if (d.telepon.trim().isNotEmpty) tengah('Telp ${d.telepon.trim()}');
+  for (final l in d.tambahan.split('\n')) {
+    tengah(l);
+  }
   if (d.cetakUlang) tengah('*** CETAK ULANG ***', tebal: true);
   if (d.dibatalkan) tengah('*** DIBATALKAN ***', tebal: true);
   if (d.tukar != null) tengah('TUKAR BARANG', tebal: true);
@@ -319,8 +335,12 @@ List<BarisStruk> susunStrukRetur(DataStrukRetur d) {
   }
 
   tengah(d.namaToko, tebal: true, besar: true);
-  if (d.namaCabang.isNotEmpty) tengah('Cabang ${d.namaCabang}');
+  // Nama cabang sengaja tidak dicetak (nomor struk sudah memuat kode cabang).
   if (d.alamat.isNotEmpty) tengah(d.alamat);
+  if (d.telepon.trim().isNotEmpty) tengah('Telp ${d.telepon.trim()}');
+  for (final l in d.tambahan.split('\n')) {
+    tengah(l);
+  }
   if (d.cetakUlang) tengah('*** CETAK ULANG ***', tebal: true);
   tengah('STRUK RETUR', tebal: true);
   b.add(BarisStruk(garis()));

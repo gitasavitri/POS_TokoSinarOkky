@@ -26,6 +26,10 @@ class PengaturanRepo {
   /// dan isian awal modal saat buka shift. 0 = tidak dipakai.
   static const kModalTetap = 'modal_tetap';
 
+  /// Tulisan opsional di kepala struk (revisi struk): khusus PC ini, tidak disinkronkan.
+  static const kStrukTelepon = 'struk_telepon';
+  static const kStrukTambahan = 'struk_tambahan';
+
   String? ambil(String kunci) =>
       _db.satu('SELECT nilai FROM pengaturan_perangkat WHERE kunci = ?', [kunci])?['nilai'] as String?;
 
@@ -77,6 +81,8 @@ class PengaturanRepo {
       alamat: r['alamat'] as String,
       pesanStruk: r['pesan_struk'] as String,
       namaToko: ambil(kNamaToko) ?? 'Toko',
+      telepon: ambil(kStrukTelepon) ?? '',
+      tambahan: ambil(kStrukTambahan) ?? '',
     );
   }
 
@@ -88,13 +94,23 @@ class PengaturanRepo {
     required String pesanStruk,
     required String namaToko,
     required String olehId,
+    String telepon = '',
+    String tambahan = '',
   }) {
+    for (final teks in [pesanStruk, tambahan]) {
+      final galat = cekPesanStruk(teks);
+      if (galat != null) throw ArgumentError(galat);
+    }
     _db.transaksi(() {
       _db.jalankan(
         'UPDATE cabang SET nama = ?, alamat = ?, pesan_struk = ?, updated_at = ? WHERE id = ?',
         [nama.trim(), alamat.trim(), pesanStruk.trim(), _db.sekarangIso(), cabangId],
       );
       simpan(kNamaToko, namaToko.trim());
+      final tel = telepon.trim();
+      final tam = tambahan.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).join('\n');
+      simpan(kStrukTelepon, tel.isEmpty ? null : tel);
+      simpan(kStrukTambahan, tam.isEmpty ? null : tam);
       _db.outbox('cabang', cabangId);
       _db.log(cabangId: cabangId, penggunaId: olehId, aksi: 'ubah_info_cabang', detail: {'nama': nama});
     });

@@ -307,11 +307,13 @@ class _InfoTokoState extends State<_InfoToko> {
   late final _toko = TextEditingController(text: c.namaToko);
   late final _nama = TextEditingController(text: c.nama);
   late final _alamat = TextEditingController(text: c.alamat);
+  late final _telepon = TextEditingController(text: c.telepon);
+  late final _tambahan = TextEditingController(text: c.tambahan);
   late final _pesan = TextEditingController(text: c.pesanStruk);
 
   @override
   Widget build(BuildContext context) => Panel(
-        judul: 'Info toko di struk (Admin)',
+        judul: 'Tulisan di struk (Admin)',
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(child: TextField(controller: _toko, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Nama toko'))),
@@ -321,30 +323,42 @@ class _InfoTokoState extends State<_InfoToko> {
             SizedBox(width: 140, child: InputDecorator(decoration: const InputDecoration(labelText: 'Kode cabang'), child: Text(c.kode, style: const TextStyle(fontSize: 18)))),
           ]),
           const SizedBox(height: 14),
-          TextField(controller: _alamat, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Alamat')),
+          TextField(controller: _alamat, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Alamat (opsional)')),
           const SizedBox(height: 14),
-          TextField(controller: _pesan, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Pesan di bawah struk')),
+          TextField(controller: _telepon, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Nomor telepon (opsional, dicetak "Telp …")')),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _tambahan,
+            minLines: 1,
+            maxLines: 3,
+            style: const TextStyle(fontSize: 18),
+            decoration: const InputDecoration(labelText: 'Tulisan tambahan di atas struk (opsional, satu baris per Enter)'),
+          ),
+          const SizedBox(height: 14),
+          TextField(controller: _pesan, style: const TextStyle(fontSize: 18), decoration: const InputDecoration(labelText: 'Pesan di bawah struk (opsional)')),
           const SizedBox(height: 14),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: () {
                 final app = context.app;
-                final galat = cekPesanStruk(_pesan.text);
+                final galat = cekPesanStruk(_pesan.text) ?? cekPesanStruk(_tambahan.text);
                 if (galat != null) return tampilkanPesan(context, galat, galat: true);
                 app.pengaturan.ubahInfoCabang(
                   cabangId: c.id,
                   nama: _nama.text,
                   alamat: _alamat.text,
                   pesanStruk: _pesan.text,
+                  telepon: _telepon.text,
+                  tambahan: _tambahan.text,
                   namaToko: _toko.text,
                   olehId: app.penggunaAktif!.id,
                 );
-                tampilkanPesan(context, 'Info toko disimpan.');
+                tampilkanPesan(context, 'Tulisan struk disimpan.');
                 app.segarkan();
                 widget.onSimpan();
               },
-              child: const Text('Simpan info toko'),
+              child: const Text('Simpan tulisan struk'),
             ),
           ),
         ]),

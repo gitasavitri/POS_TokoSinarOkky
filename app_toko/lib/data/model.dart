@@ -8,6 +8,8 @@ class InfoCabang {
     required this.alamat,
     required this.pesanStruk,
     required this.namaToko,
+    this.telepon = '',
+    this.tambahan = '',
   });
 
   final String id;
@@ -18,6 +20,10 @@ class InfoCabang {
 
   /// Nama merek toko (sama untuk semua cabang).
   final String namaToko;
+
+  /// Opsional, khusus PC ini (tidak ikut sinkron): dicetak di kepala struk.
+  final String telepon;
+  final String tambahan;
 }
 
 class Pengguna {

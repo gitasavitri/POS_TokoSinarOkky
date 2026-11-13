@@ -781,4 +781,55 @@ void main() {
     expect(j['nama'], 'Gula Pasir 1 kg');
     expect(j['barcode'], '8990001');
   });
+
+  group('tulisan di struk (telepon & tambahan)', () {
+    setUp(siapkan);
+    tearDown(() => db.tutup());
+
+    test('bawaan kosong, lalu bisa diisi dan dikosongkan lagi', () {
+      final p = PengaturanRepo(db);
+      expect(cabang.telepon, '');
+      expect(cabang.tambahan, '');
+      p.ubahInfoCabang(
+        cabangId: cabang.id,
+        nama: 'Uji',
+        alamat: 'Jl. Uji 1',
+        pesanStruk: 'Terima kasih',
+        namaToko: 'TOKO UJI',
+        olehId: admin.id,
+        telepon: ' 0812-0000-0000 ',
+        tambahan: ' Buka 07.00 \n\n IG @uji ',
+      );
+      final c = p.infoCabang()!;
+      expect(c.telepon, '0812-0000-0000');
+      expect(c.tambahan, 'Buka 07.00\nIG @uji');
+      p.ubahInfoCabang(
+        cabangId: cabang.id,
+        nama: 'Uji',
+        alamat: 'Jl. Uji 1',
+        pesanStruk: 'Terima kasih',
+        namaToko: 'TOKO UJI',
+        olehId: admin.id,
+      );
+      expect(p.infoCabang()!.telepon, '');
+      expect(p.infoCabang()!.tambahan, '');
+    });
+
+    test('tulisan tambahan tidak boleh memuat aturan tukar/retur', () {
+      final p = PengaturanRepo(db);
+      expect(
+        () => p.ubahInfoCabang(
+          cabangId: cabang.id,
+          nama: 'Uji',
+          alamat: 'Jl. Uji 1',
+          pesanStruk: 'Terima kasih',
+          namaToko: 'TOKO UJI',
+          olehId: admin.id,
+          tambahan: 'Barang bisa ditukar 3 hari',
+        ),
+        throwsArgumentError,
+      );
+      expect(p.infoCabang()!.tambahan, '');
+    });
+  });
 }
