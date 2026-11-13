@@ -1,0 +1,185 @@
+# Test semua bagian + buat file .exe Windows untuk Aplikasi Toko dan Aplikasi Pusat.
+# Hasil build bisa diunduh di tab Actions → pilih run → bagian "Artifacts".
+name: Test & build
+
+on:
+  push:
+    branches: [main, pengembangan]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.47.9'
+
+jobs:
+  test:
+    name: Test (logika, aplikasi, server, ujung-ke-ujung)
+    runs-on: ubuntu-latest
+    services:
+      # MySQL 8 sama seperti di VPS. Test membuat & menghapus database sementara sendiri.
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root-uji
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -proot-uji"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_UJI_URL: mysql://root:root-uji@127.0.0.1:3306
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Skema SQLite
+        run: python3 database/test_schema.py
+
+      - name: pos_core
+        working-directory: packages/pos_core
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
+
+      - name: pos_ui
+        working-directory: packages/pos_ui
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Aplikasi Toko
+        working-directory: app_toko
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Aplikasi Pusat
+        working-directory: app_pusat
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Server Pusat
+        working-directory: server
+        run: |
+          npm ci
+          npm test
+
+      - name: Ujung-ke-ujung (Aplikasi Toko & Pusat ⇄ Server asli + MySQL 8)
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot-uji -e "CREATE DATABASE pos_e2e CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          export DATABASE_URL=mysql://root:root-uji@127.0.0.1:3306/pos_e2e
+          cd server
+          PORT=3999 SINKRON_JEDA_DETIK=0 node src/server.js > ../server-e2e.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3999/api/sehat && break; sleep 1; done
+          K1=$(npm run -s buat-kode | sed -n 's/Kode pendaftaran: //p')
+          K2=$(npm run -s buat-kode | sed -n 's/Kode pendaftaran: //p')
+          ADMIN=$(node --input-type=module -e "
+            import { buatPool } from './src/db.js';
+            import { buatAdminPusat } from './test/bantu.js';
+            const pool = buatPool(process.env.DATABASE_URL);
+            const a = await buatAdminPusat(pool, { namaPengguna: 'uji.ci', sandi: 'sandi-uji-panjang' });
+            console.log(a.namaPengguna + ':' + a.sandi + ':' + a.rahasia);
+            await pool.end();")
+          cd ../app_toko
+          POS_SERVER_UJI=http://127.0.0.1:3999 POS_KODE_UJI="$K1,$K2" flutter test test/sinkron_test.dart
+          cd ../app_pusat
+          POS_SERVER_UJI=http://127.0.0.1:3999 POS_ADMIN_UJI="$ADMIN" flutter test test/api_e2e_test.dart
+
+      - name: Log server (kalau gagal)
+        if: failure()
+        run: cat server-e2e.log || true
+
+  build-windows:
+    name: Build Windows (.exe)
+    needs: test
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        app: [app_toko, app_pusat]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build
+        working-directory: ${{ matrix.app }}
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      - name: Runtime Visual C++ ikut dikemas
+        shell: pwsh
+        run: |
+          # Supaya jalan di PC yang belum memasang Visual C++ Redistributable.
+          $tujuan = '${{ matrix.app }}/build/windows/x64/runner/Release'
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" $tujuan -ErrorAction Continue
+          }
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress | Out-Null
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $versi = (Select-String -Path '${{ matrix.app }}/pubspec.yaml' -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $app = if ('${{ matrix.app }}' -eq 'app_toko') { 'toko' } else { 'pusat' }
+          & $iscc /Q "/DAPP=$app" "/DVERSI=$versi" installer/pos.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup gagal ($LASTEXITCODE)" }
+          Get-ChildItem installer/hasil
+
+      - name: Kemas jadi zip (cadangan, tanpa installer)
+        shell: pwsh
+        run: |
+          $nama = if ('${{ matrix.app }}' -eq 'app_toko') { 'POS-Toko' } else { 'POS-Pusat' }
+          Compress-Archive -Path '${{ matrix.app }}/build/windows/x64/runner/Release/*' -DestinationPath "$nama-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app == 'app_toko' && 'POS-Toko-installer' || 'POS-Pusat-installer' }}
+          path: installer/hasil/*.exe
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app == 'app_toko' && 'POS-Toko-windows' || 'POS-Pusat-windows' }}
+          path: '*-windows.zip'
+          retention-days: 30
+
+  skrip-server-windows:
+    name: Cek skrip server Windows (PowerShell)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Periksa tata bahasa skrip
+        shell: powershell
+        run: |
+          $salah = 0
+          foreach ($f in Get-ChildItem server/windows/*.ps1) {
+            $err = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$err) | Out-Null
+            if ($err) { $salah++; $err | ForEach-Object { Write-Host "$($f.Name): $($_.Extent.StartLineNumber): $($_.Message)" } }
+            else { Write-Host "ok $($f.Name)" }
+          }
+          if ($salah) { throw "$salah skrip bermasalah" }

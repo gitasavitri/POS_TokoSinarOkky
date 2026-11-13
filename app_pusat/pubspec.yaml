@@ -1,0 +1,46 @@
+name: app_pusat
+description: "Aplikasi Pusat POS Sinar Okky: laporan semua toko, harga pusat, perangkat."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.6
+  pos_core:
+    path: ../packages/pos_core
+  pos_ui:
+    path: ../packages/pos_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/gambar/logo.png
+
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans_400Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans_500Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans_600SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans_700Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans_800ExtraBold.ttf
+          weight: 800
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono_400Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono_700Bold.ttf
+          weight: 700
