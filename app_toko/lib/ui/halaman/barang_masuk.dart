@@ -445,11 +445,12 @@ class _FormItemState extends State<_FormItem> {
   late final _jumlah = TextEditingController(text: it.jumlah == 0 ? '' : formatAngka(it.jumlah));
   late final _hpp = TextEditingController(text: it.hpp == 0 ? '' : formatAngka(it.hpp));
   late final _jual = TextEditingController(text: it.hargaJual == 0 ? '' : formatAngka(it.hargaJual));
+  /// Tingkat harga grosir: selalu tersedia minimal 3 baris isian (opsional, baris kosong diabaikan).
   late final List<(TextEditingController, TextEditingController)> _grosir = [
     for (final g in it.grosir) (TextEditingController(text: '${g.minQty}'), TextEditingController(text: formatAngka(g.harga))),
+    for (var i = it.grosir.length; i < 3; i++) (TextEditingController(), TextEditingController()),
   ];
   final _fokus = List<FocusNode>.generate(7, (_) => FocusNode());
-  late bool _grosirBuka = it.grosir.isNotEmpty;
 
   @override
   void initState() {
@@ -492,8 +493,13 @@ class _FormItemState extends State<_FormItem> {
     widget.onUbah();
   }
 
+  bool _barisGrosirKosong((TextEditingController, TextEditingController) g) => g.$1.text.trim().isEmpty && g.$2.text.trim().isEmpty;
+
   void _simpanGrosir() {
-    it.grosir = [for (final (m, h) in _grosir) TingkatGrosir(minQty: bacaAngka(m.text), harga: bacaAngka(h.text))];
+    it.grosir = [
+      for (final g in _grosir)
+        if (!_barisGrosirKosong(g)) TingkatGrosir(minQty: bacaAngka(g.$1.text), harga: bacaAngka(g.$2.text)),
+    ];
     widget.onUbah();
     setState(() {});
   }
@@ -570,13 +576,14 @@ class _FormItemState extends State<_FormItem> {
         ),
       );
 
-  static const _padatan = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11));
+  static const _tinggiKotak = BoxConstraints.tightFor(height: 46);
+  static const _padatan = InputDecoration(isDense: true, constraints: _tinggiKotak, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 0));
 
   Widget _pilihan(int k, String? nilai, List<(String, String)> opsi, ValueChanged<String> ubah) => ListenableBuilder(
         listenable: _fokus[k],
         builder: (_, _) => InputDecorator(
           isFocused: _fokus[k].hasFocus,
-          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 3)),
+          decoration: _padatan,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               focusNode: _fokus[k],
@@ -619,7 +626,7 @@ class _FormItemState extends State<_FormItem> {
         ),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _kolom(
@@ -653,13 +660,12 @@ class _FormItemState extends State<_FormItem> {
                   flex: 2,
                 ),
               ]),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _kolom(
                   _kKategori,
                   'KATEGORI',
                   _pilihan(_kKategori, it.kategoriId, [for (final k in widget.kategori) (k.id, k.nama)], (v) => _ubah(() => it.kategoriId = v)),
-                  flex: 2,
                 ),
                 const SizedBox(width: 12),
                 _kolom(_kSatuan, 'SATUAN', _pilihan(_kSatuan, it.satuan, [for (final s in daftarSatuan) (s, s)], (v) => _ubah(() => it.satuan = v))),
@@ -690,6 +696,7 @@ class _FormItemState extends State<_FormItem> {
                   _kHpp,
                   'HPP / MODAL PER ${it.satuan.toUpperCase()}',
                   InputRupiah(
+                    padat: true,
                     controller: _hpp,
                     focusNode: _fokus[_kHpp],
                     onChanged: (n) => _ubah(() => it.hpp = n),
@@ -701,6 +708,7 @@ class _FormItemState extends State<_FormItem> {
                   _kJual,
                   'HARGA JUAL ECERAN',
                   InputRupiah(
+                    padat: true,
                     controller: _jual,
                     focusNode: _fokus[_kJual],
                     tegas: jualBerubah,
@@ -710,41 +718,38 @@ class _FormItemState extends State<_FormItem> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  flex: 2,
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 24),
-                    child: it.hargaJual > 0
-                        ? Text(
-                            '${jualBerubah ? 'Sebelumnya ${formatRupiah(asal.harga!.eceran)} · ' : ''}'
-                            '${untung > 0 ? 'Untung ${formatRupiah(untung)}' : 'Rugi ${formatRupiah(-untung)}'} per ${it.satuan}',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700, color: untung <= 0 ? Warna.merah : (jualBerubah ? Warna.oranye : Warna.suksesTua)),
-                          )
-                        : const SizedBox.shrink(),
+                    padding: const EdgeInsets.only(top: 20),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (it.hargaJual > 0)
+                        Text(
+                          '${jualBerubah ? 'Sebelumnya ${formatRupiah(asal.harga!.eceran)} · ' : ''}'
+                          '${untung > 0 ? 'Untung ${formatRupiah(untung)}' : 'Rugi ${formatRupiah(-untung)}'} per ${it.satuan}',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: untung <= 0 ? Warna.merah : (jualBerubah ? Warna.oranye : Warna.suksesTua)),
+                        ),
+                      Text.rich(TextSpan(style: const TextStyle(fontSize: 14, color: Warna.teks2), children: [
+                        const TextSpan(text: 'Stok '),
+                        TextSpan(text: formatAngka(stok), style: const TextStyle(fontWeight: FontWeight.w800)),
+                        const TextSpan(text: ' → '),
+                        TextSpan(text: '${formatAngka(stok + it.jumlah)} ${it.satuan}', style: const TextStyle(fontWeight: FontWeight.w800, color: Warna.utamaGelap)),
+                      ])),
+                    ]),
                   ),
                 ),
               ]),
-              const SizedBox(height: 10),
-              Text.rich(TextSpan(style: const TextStyle(fontSize: 15, color: Warna.teks2), children: [
-                const TextSpan(text: 'Stok sekarang '),
-                TextSpan(text: '${formatAngka(stok)} ${it.satuan}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                const TextSpan(text: '     Stok setelah masuk '),
-                TextSpan(text: '${formatAngka(stok + it.jumlah)} ${it.satuan}', style: const TextStyle(fontWeight: FontWeight.w800, color: Warna.utamaGelap)),
-              ])),
-              const SizedBox(height: 10),
-              if (_grosirBuka) ..._bagianGrosir(salahGrosir),
+              const SizedBox(height: 8),
+              ..._bagianGrosir(salahGrosir),
               Row(children: [
-                if (!_grosirBuka)
-                  OutlinedButton(
-                    key: const ValueKey('buka-grosir'),
-                    onPressed: () {
-                      _grosir.add((TextEditingController(), TextEditingController()));
-                      _grosirBuka = true;
-                      _simpanGrosir();
-                    },
-                    style: OutlinedButton.styleFrom(foregroundColor: Warna.utamaGelap, side: const BorderSide(color: Warna.utama, width: 2)),
-                    child: const Text('+ Harga grosir (opsional)'),
-                  ),
+                OutlinedButton(
+                  key: const ValueKey('tambah-grosir'),
+                  onPressed: () {
+                    _grosir.add((TextEditingController(), TextEditingController()));
+                    _simpanGrosir();
+                  },
+                  style: OutlinedButton.styleFrom(foregroundColor: Warna.utamaGelap, side: const BorderSide(color: Warna.utama, width: 2)),
+                  child: const Text('+ Tambah harga grosir'),
+                ),
                 const Spacer(),
                 OutlinedButton(
                   onPressed: widget.onHapus,
@@ -761,63 +766,66 @@ class _FormItemState extends State<_FormItem> {
     );
   }
 
-  List<Widget> _bagianGrosir(Map<int, String> salahGrosir) => [
-        const LabelKecil('HARGA GROSIR (opsional)', warna: Warna.utamaGelap),
-        const SizedBox(height: 6),
-        for (var i = 0; i < _grosir.length; i++)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Warna.baris2, borderRadius: BorderRadius.circular(8), border: Border.all(color: Warna.garisTipis, width: 2)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                SizedBox(width: 90, child: Text('Tingkat ${i + 1}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Warna.teks2))),
-                const Text('Beli minimal  ', style: TextStyle(fontSize: 16)),
-                SizedBox(
-                  width: 90,
-                  child: TextField(
-                    controller: _grosir[i].$1,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                    decoration: _padatan,
-                    onChanged: (_) => _simpanGrosir(),
-                  ),
-                ),
-                Text('  ${it.satuan}  →  harga  ', style: const TextStyle(fontSize: 16)),
-                SizedBox(width: 180, child: InputRupiah(controller: _grosir[i].$2, onChanged: (_) => _simpanGrosir())),
-                const Spacer(),
-                OutlinedButton(
-                  onPressed: () {
-                    _grosir.removeAt(i);
-                    if (_grosir.isEmpty) _grosirBuka = false;
-                    _simpanGrosir();
-                  },
-                  style: OutlinedButton.styleFrom(foregroundColor: Warna.merah, side: const BorderSide(color: Color(0xFFE8C4BE), width: 2)),
-                  child: const Text('Hapus'),
-                ),
-              ]),
-              if (salahGrosir[i] != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(salahGrosir[i]!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Warna.merah)),
-                ),
-            ]),
+  Widget _tingkat(int i, Map<int, String> salahGrosir) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: LabelKecil('TINGKAT ${i + 1}')),
+          if (i >= 3)
+            InkWell(
+              onTap: () {
+                _grosir.removeAt(i);
+                _simpanGrosir();
+              },
+              child: const Padding(padding: EdgeInsets.only(left: 6), child: Text('Hapus', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Warna.merah))),
+            ),
+        ]),
+        const SizedBox(height: 4),
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Expanded(
+            flex: 2,
+            child: TextField(
+              key: ValueKey('grosir-min-$i'),
+              controller: _grosir[i].$1,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              decoration: _padatan.copyWith(hintText: 'min'),
+              onChanged: (_) => _simpanGrosir(),
+            ),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton(
-            onPressed: () {
-              _grosir.add((TextEditingController(), TextEditingController()));
-              _simpanGrosir();
-            },
-            style: OutlinedButton.styleFrom(foregroundColor: Warna.utamaGelap, side: const BorderSide(color: Warna.utama, width: 2)),
-            child: const Text('+ Tambah tingkat harga'),
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('→', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+          Expanded(
+            flex: 3,
+            child: InputRupiah(key: ValueKey('grosir-harga-$i'), padat: true, controller: _grosir[i].$2, onChanged: (_) => _simpanGrosir()),
           ),
+        ]),
+        if (salahGrosir[i] != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(salahGrosir[i]!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Warna.merah)),
+          ),
+      ]);
+
+  List<Widget> _bagianGrosir(Map<int, String> salahGrosir) {
+    // salahGrosir memakai nomor urut setelah baris kosong dibuang; petakan kembali ke baris di layar.
+    final isi = [for (var i = 0; i < _grosir.length; i++) if (!_barisGrosirKosong(_grosir[i])) i];
+    final galat = <int, String>{for (final e in salahGrosir.entries) if (e.key < isi.length) isi[e.key]: e.value};
+    return [
+      const LabelKecil('HARGA GROSIR (opsional) · beli minimal → harga per satuan', warna: Warna.utamaGelap),
+      const SizedBox(height: 6),
+      for (var a = 0; a < _grosir.length; a += 3)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (var k = 0; k < 3; k++) ...[
+              if (k > 0) const SizedBox(width: 12),
+              Expanded(child: a + k < _grosir.length ? _tingkat(a + k, galat) : const SizedBox.shrink()),
+            ],
+          ]),
         ),
-        const SizedBox(height: 8),
-      ];
+      const SizedBox(height: 2),
+    ];
+  }
 }
 
 class _Nilai extends StatelessWidget {

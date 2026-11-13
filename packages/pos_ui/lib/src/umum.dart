@@ -223,11 +223,15 @@ class InputRupiah extends StatelessWidget {
     this.focusNode,
     this.galat,
     this.tegas = false,
+    this.padat = false,
   });
 
   final TextEditingController controller;
   final String? label;
   final bool besar;
+
+  /// Tinggi tetap 46 px, huruf 18: sama dengan kotak isian lain di formulir padat.
+  final bool padat;
   final bool autofocus;
   final ValueChanged<int>? onChanged;
   final ValueChanged<int>? onSubmitted;
@@ -239,7 +243,7 @@ class InputRupiah extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ukuran = besar ? 34.0 : 21.0;
+    final ukuran = padat ? 18.0 : (besar ? 34.0 : 21.0);
     final garis = tegas
         ? OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Warna.oranyeTegas, width: 3))
         : null;
@@ -255,8 +259,11 @@ class InputRupiah extends StatelessWidget {
         labelText: label,
         errorText: galat,
         prefixText: 'Rp  ',
-        prefixStyle: TextStyle(fontSize: ukuran * 0.75, fontWeight: FontWeight.w800, color: Warna.teks2),
+        prefixStyle: TextStyle(fontSize: padat ? 14 : ukuran * 0.75, fontWeight: FontWeight.w800, color: Warna.teks2),
         hintText: '0',
+        isDense: padat ? true : null,
+        constraints: padat ? const BoxConstraints.tightFor(height: 46) : null,
+        contentPadding: padat ? const EdgeInsets.symmetric(horizontal: 12) : null,
         fillColor: tegas ? const Color(0xFFFFF8EC) : Colors.white,
         enabledBorder: garis,
         focusedBorder: garis,

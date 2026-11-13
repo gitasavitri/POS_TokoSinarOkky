@@ -815,9 +815,30 @@ void main() {
     expect(fokus('kolom-jumlah'), isTrue);
     await t.enterText(find.byKey(const ValueKey('kolom-jumlah')), '5');
     await enter();
-    await t.enterText(find.byType(TextField).at(find.byType(TextField).evaluate().length - 2), '1000'); // HPP
+    Finder kotakRupiah(int n) => find.descendant(of: find.byType(InputRupiah).at(n), matching: find.byType(TextField));
+    await t.enterText(kotakRupiah(0), '1000'); // HPP
     await enter();
-    await t.enterText(find.byType(TextField).at(find.byType(TextField).evaluate().length - 1), '1500'); // Harga jual
+    await t.enterText(kotakRupiah(1), '1500'); // Harga jual
+    // Harga grosir: 3 tingkat kosong selalu tampil, semua kotak setinggi 46 px, tambah tingkat ke-4.
+    for (var i = 0; i < 3; i++) {
+      expect(find.byKey(ValueKey('grosir-min-$i')), findsOneWidget);
+    }
+    expect(find.byKey(const ValueKey('grosir-min-3')), findsNothing);
+    final tinggi = {
+      for (final k in ['kolom-barcode', 'kolom-nama', 'kolom-jumlah', 'grosir-min-0'])
+        t.getSize(find.byKey(ValueKey(k))).height,
+      t.getSize(kotakRupiah(0)).height,
+      t.getSize(kotakRupiah(1)).height,
+      t.getSize(kotakRupiah(2)).height,
+    };
+    expect(tinggi, {46.0}, reason: 'semua kotak isian sama tinggi');
+    if (_gambar) await expectLater(find.byKey(const ValueKey('layar')), matchesGoldenFile('gambar/barang-masuk-form.png'));
+    await t.ensureVisible(find.byKey(const ValueKey('tambah-grosir')));
+    await t.tap(find.byKey(const ValueKey('tambah-grosir')));
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('grosir-min-3')), findsOneWidget);
+    await t.enterText(find.byKey(const ValueKey('kolom-jumlah')), '5');
+    await t.enterText(kotakRupiah(1), '1500');
     await enter(); // lengkap → barang berikutnya
     await _tunggu(t);
     expect(find.text('1 barang'), findsOneWidget);
