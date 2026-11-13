@@ -781,6 +781,69 @@ void main() {
     s.app.keluar();
   });
 
+  testWidgets('barang masuk: kursor di Barcode, Enter/panah antar kolom, Enter di Harga jual = barang berikutnya', (t) async {
+    final s = await t.runAsync(_siapkanToko);
+    s!.app.masuk(s.kasir);
+    await _pasang(t, s.app);
+    await t.tap(find.text(MenuKasir.barangMasuk.label));
+    await _tunggu(t);
+
+    bool fokus(String kunci) => t.widget<TextField>(find.byKey(ValueKey(kunci))).focusNode!.hasFocus;
+    Future<void> enter() async {
+      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(t.takeException(), isNull, reason: 'form muat di layar tanpa overflow');
+    expect(find.byType(Scrollbar), findsNothing, reason: 'tanpa scroll');
+    expect(fokus('kolom-barcode'), isTrue, reason: 'kursor langsung di Barcode');
+
+    // Barang baru: barcode → nama → kategori → satuan → jumlah → HPP → harga jual.
+    await t.enterText(find.byKey(const ValueKey('kolom-barcode')), '8990099');
+    await enter();
+    expect(fokus('kolom-nama'), isTrue);
+    await t.enterText(find.byKey(const ValueKey('kolom-nama')), 'Kopi Hitam 100 g');
+    await enter();
+    final kategoriAwal = s.app.barangMasuk.muatDraft(s.app.cabang.id)!.item.first.kategoriId;
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown); // di Kategori: ganti pilihan
+    await t.pump(const Duration(milliseconds: 100));
+    expect(s.app.barangMasuk.muatDraft(s.app.cabang.id)!.item.first.kategoriId, isNot(kategoriAwal));
+    await t.sendKeyEvent(LogicalKeyboardKey.enter); // → Satuan
+    await t.pump(const Duration(milliseconds: 100));
+    await t.sendKeyEvent(LogicalKeyboardKey.enter); // → Jumlah
+    await t.pump(const Duration(milliseconds: 100));
+    expect(fokus('kolom-jumlah'), isTrue);
+    await t.enterText(find.byKey(const ValueKey('kolom-jumlah')), '5');
+    await enter();
+    await t.enterText(find.byType(TextField).at(find.byType(TextField).evaluate().length - 2), '1000'); // HPP
+    await enter();
+    await t.enterText(find.byType(TextField).at(find.byType(TextField).evaluate().length - 1), '1500'); // Harga jual
+    await enter(); // lengkap → barang berikutnya
+    await _tunggu(t);
+    expect(find.text('1 barang'), findsOneWidget);
+    expect(fokus('kolom-barcode'), isTrue, reason: 'form kosong, kursor kembali ke Barcode');
+    expect(t.widget<TextField>(find.byKey(const ValueKey('kolom-barcode'))).controller!.text, '');
+
+    // Barcode yang sudah ada di sistem: nama terisi otomatis, kursor ke Jumlah.
+    await t.enterText(find.byKey(const ValueKey('kolom-barcode')), '8990001');
+    await enter();
+    await _tunggu(t);
+    expect(fokus('kolom-jumlah'), isTrue);
+    expect(t.widget<TextField>(find.byKey(const ValueKey('kolom-nama'))).controller!.text, 'Gula Pasir 1 kg');
+
+    // Enter di Barcode yang kosong (form kosong) = selesai input → konfirmasi (nomor faktur wajib dulu).
+    await t.enterText(find.byKey(const ValueKey('kolom-jumlah')), '3');
+    await enter();
+    await enter(); // HPP → Harga jual
+    await enter(); // Harga jual lengkap → form kosong
+    await _tunggu(t);
+    expect(find.text('2 barang'), findsOneWidget);
+    await enter(); // Barcode kosong, form kosong
+    await _tunggu(t);
+    expect(find.textContaining('nomor faktur'), findsWidgets);
+    s.app.keluar();
+  });
+
   testWidgets('admin: Impor stok awal dari Excel → pratinjau, baris salah ditandai, simpan (J)', (t) async {
     final s = await t.runAsync(_siapkanToko);
     final c = s!.app.cabang;
