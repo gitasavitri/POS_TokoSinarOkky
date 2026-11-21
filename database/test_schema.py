@@ -297,4 +297,20 @@ harus_ditolak(db, "jumlah order 0 ditolak", "INSERT INTO order_barang_item VALUE
 harus_ditolak(db, "order tidak bisa diubah", "UPDATE order_barang SET catatan = 'x' WHERE id = ?", (o1,))
 harus_ditolak(db, "item order tidak bisa dihapus", "DELETE FROM order_barang_item WHERE order_id = ?", (o1,))
 
+# Usulan harga dari kasir (migrasi 006)
+u1 = uid()
+USUL = ("INSERT INTO usulan_harga (id, cabang_id, barang_id, harga_lama, harga_baru, grosir_json, hpp, sumber, alasan,"
+        " diminta_oleh, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+db.execute(USUL, (u1, cab_a, gula, 18000, 15000, "[[10,14000]]", 12000, "ubah_harga", "Promo", kasir, T0))
+cek("usulan harga baru berstatus menunggu", db.execute("SELECT status FROM usulan_harga WHERE id = ?", (u1,)).fetchone()[0] == "menunggu")
+harus_ditolak(db, "harga usulan 0 ditolak", USUL, (uid(), cab_a, gula, 18000, 0, "[]", 12000, "ubah_harga", "x", kasir, T0))
+harus_ditolak(db, "sumber usulan tidak dikenal ditolak", USUL, (uid(), cab_a, gula, 18000, 15000, "[]", 12000, "pusat", "x", kasir, T0))
+harus_ditolak(db, "usulan tanpa alasan ditolak", USUL, (uid(), cab_a, gula, 18000, 15000, "[]", 12000, "ubah_harga", "", kasir, T0))
+harus_ditolak(db, "usulan tidak bisa dihapus", "DELETE FROM usulan_harga WHERE id = ?", (u1,))
+harus_ditolak(db, "harga usulan tidak bisa diubah diam-diam", "UPDATE usulan_harga SET harga_baru = 17000 WHERE id = ?", (u1,))
+harus_ditolak(db, "status usulan tidak bisa kembali/tetap menunggu lewat update", "UPDATE usulan_harga SET status = 'menunggu' WHERE id = ?", (u1,))
+db.execute("UPDATE usulan_harga SET status = 'disetujui', diputuskan_oleh = ?, diputuskan_di = 'toko', diputuskan_pada = ? WHERE id = ?", (spv, T0, u1))
+cek("SPV menyetujui usulan", db.execute("SELECT status FROM usulan_harga WHERE id = ?", (u1,)).fetchone()[0] == "disetujui")
+harus_ditolak(db, "keputusan kedua ditolak (yang lebih dulu berlaku)", "UPDATE usulan_harga SET status = 'ditolak' WHERE id = ?", (u1,))
+
 print(f"\nSemua {lulus} pengujian lulus.")

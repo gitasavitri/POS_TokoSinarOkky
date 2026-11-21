@@ -93,7 +93,7 @@ void main() {
   Map<String, String> isiBarang() {
     masuk.kirim(
       cabang: cabang,
-      oleh: kasir,
+      oleh: spv,
       draft: DraftBarangMasuk(supplierId: tokoUtama(), noFaktur: 'F-001', item: [
         DraftItemMasuk(barcode: '8990001', nama: 'Gula Pasir 1 kg', kategoriId: kategori('Sembako'), satuan: 'pak', jumlah: 50, hpp: 16200, hargaJual: 17500),
         DraftItemMasuk(barcode: '8990002', nama: 'Minyak Goreng 2 L', kategoriId: kategori('Sembako'), satuan: 'pcs', jumlah: 3, hpp: 33000, hargaJual: 36000),
@@ -301,7 +301,7 @@ void main() {
     test('tanpa barcode: cocok dengan nama barang yang sudah ada (huruf besar/kecil diabaikan)', () {
       masuk.kirim(
         cabang: cabang,
-        oleh: kasir,
+        oleh: spv,
         draft: DraftBarangMasuk(supplierId: tokoUtama(), noFaktur: 'F-2', item: [
           DraftItemMasuk(nama: 'Tempe Papan', kategoriId: kategori('Sembako'), satuan: 'pcs', jumlah: 2, hpp: 4000, hargaJual: 5000),
         ]),

@@ -63,7 +63,7 @@ void main() {
   }
 
   /// Barang baru lewat barang masuk: gula 50 pak HPP 16.200, eceran 17.500, grosir min 10 = 17.000.
-  String masukkanGula({int jumlah = 50}) {
+  String masukkanGula({int jumlah = 50, Pengguna? oleh}) {
     final kat = katalog.kategori().firstWhere((k) => k.nama == 'Sembako');
     final draft = DraftBarangMasuk(supplierId: katalog.supplier().first.id, noFaktur: 'F-001', item: [
       DraftItemMasuk(
@@ -77,7 +77,7 @@ void main() {
         grosir: [const TingkatGrosir(minQty: 10, harga: 17000)],
       ),
     ]);
-    masuk.kirim(cabang: cabang, oleh: kasir, draft: draft);
+    masuk.kirim(cabang: cabang, oleh: oleh ?? spv, draft: draft);
     jam.maju();
     return katalog.cariBarcode('8990001', cabang.id)!.id;
   }
@@ -191,7 +191,7 @@ void main() {
       expect(() => db.jalankan("DELETE FROM barang_masuk"), throwsA(anything));
     });
 
-    test('barang datang lagi: HPP rata-rata tertimbang dan harga baru + antrean label', () {
+    test('barang datang lagi (SPV): HPP rata-rata tertimbang dan harga baru langsung berlaku + antrean label', () {
       final id = masukkanGula(jumlah: 12);
       final item = masuk.itemDariBarang(katalog.detail(id, cabang.id)!)
         ..jumlah = 50
@@ -201,13 +201,51 @@ void main() {
       expect(item.status, 'Data diubah');
       masuk.kirim(
           cabang: cabang,
-          oleh: kasir,
+          oleh: spv,
           draft: DraftBarangMasuk(supplierId: katalog.supplier().first.id, noFaktur: 'F-002', item: [item]));
       final d = katalog.detail(id, cabang.id)!;
       expect(d.stok, 62);
       // (12 × 16.200 + 50 × 16.400) / 62 = 16.361,29 → 16.361
       expect(d.hpp, 16361);
       expect(d.harga!.eceran, 18000);
+      expect(HargaRepo(db).antreanLabel().single.hargaBaru, 18000);
+      expect(HargaRepo(db).jumlahUsulanMenunggu(cabang.id), 0);
+    });
+
+    test('barang datang lagi (kasir): stok dan HPP masuk, harga baru hanya usulan; harga lama tetap berlaku', () {
+      final id = masukkanGula(jumlah: 12);
+      final item = masuk.itemDariBarang(katalog.detail(id, cabang.id)!)
+        ..jumlah = 50
+        ..hpp = 16400
+        ..hargaJual = 18000
+        ..grosir = [const TingkatGrosir(minQty: 10, harga: 17500)];
+      masuk.kirim(
+          cabang: cabang,
+          oleh: kasir,
+          draft: DraftBarangMasuk(supplierId: katalog.supplier().first.id, noFaktur: 'F-002', item: [item]));
+      final d = katalog.detail(id, cabang.id)!;
+      expect(d.stok, 62);
+      expect(d.hpp, 16361);
+      expect(d.harga!.eceran, 17500, reason: 'harga lama tetap berlaku sampai disetujui');
+      expect(d.harga!.grosir, [const TingkatGrosir(minQty: 10, harga: 17000)]);
+      expect(HargaRepo(db).antreanLabel(), isEmpty);
+      final u = HargaRepo(db).daftarUsulan(cabang.id).single;
+      expect(u.status, 'menunggu');
+      expect(u.hargaLama, 17500);
+      expect(u.hargaBaru, 18000);
+      expect(u.grosir, [const TingkatGrosir(minQty: 10, harga: 17500)]);
+      expect(u.hpp, 16361);
+      expect(u.sumber, 'barang_masuk');
+      expect(db.satu("SELECT COUNT(*) AS n FROM outbox WHERE tabel = 'usulan_harga'")!['n'], 1);
+      // SPV setuju → harga baru berlaku, tercatat siapa yang menyetujui
+      jam.maju();
+      HargaRepo(db).putuskanUsulan(usulanId: u.id, setuju: true, oleh: spv);
+      final sesudah = katalog.detail(id, cabang.id)!.harga!;
+      expect(sesudah.eceran, 18000);
+      expect(sesudah.grosir, [const TingkatGrosir(minQty: 10, harga: 17500)]);
+      final hj = db.satu("SELECT * FROM harga_jual WHERE sumber = 'barang_masuk' ORDER BY created_at DESC LIMIT 1")!;
+      expect(hj['dibuat_oleh'], kasir.id);
+      expect(hj['disetujui_oleh'], spv.id);
       expect(HargaRepo(db).antreanLabel().single.hargaBaru, 18000);
     });
 
@@ -742,23 +780,57 @@ void main() {
   });
 
   group('ubah harga', () {
-    test('naik: kasir boleh langsung; harga khusus toko', () {
+    test('SPV ubah harga: langsung berlaku; harga khusus toko', () {
       final id = masukkanGula();
-      HargaRepo(db).ubahHarga(cabang: cabang, barangId: id, hargaBaru: 18000, grosir: const [], alasan: 'Harga dari supplier naik', oleh: kasir);
+      final hasil = HargaRepo(db).ubahHarga(
+          cabang: cabang, barangId: id, hargaBaru: 18000, grosir: const [], alasan: 'Harga dari supplier naik', oleh: spv);
+      expect(hasil, isNull);
       expect(katalog.detail(id, cabang.id)!.harga!.eceran, 18000);
       expect(db.satu("SELECT cabang_id FROM harga_jual WHERE sumber = 'ubah_harga'")!['cabang_id'], cabang.id);
     });
 
-    test('turun > 10% atau di bawah HPP: kasir butuh PIN SPV', () {
+    test('kasir ubah harga (naik atau turun): hanya usulan, harga lama tetap berlaku', () {
       final id = masukkanGula();
       final repo = HargaRepo(db);
-      expect(
-          () => repo.ubahHarga(cabang: cabang, barangId: id, hargaBaru: 15000, grosir: const [], alasan: 'Promo', oleh: kasir),
-          throwsStateError);
-      repo.ubahHarga(
+      final naik = repo.ubahHarga(
+          cabang: cabang, barangId: id, hargaBaru: 18000, grosir: const [], alasan: 'Harga dari supplier naik', oleh: kasir);
+      final turun = repo.ubahHarga(
+          cabang: cabang, barangId: id, hargaBaru: 15000, grosir: const [], alasan: 'Promo', oleh: kasir);
+      expect(naik, isNotNull);
+      expect(turun, isNotNull);
+      expect(katalog.detail(id, cabang.id)!.harga!.eceran, 17500);
+      expect(db.satu("SELECT COUNT(*) AS n FROM harga_jual WHERE sumber = 'ubah_harga'")!['n'], 0);
+      expect(repo.jumlahUsulanMenunggu(cabang.id), 2);
+      expect(LaporanRepo(db).perluDicek(cabang.id, DateTime.utc(2000), DateTime.utc(2100)).usulanHarga, 2);
+      expect(db.satu("SELECT COUNT(*) AS n FROM log_aktivitas WHERE aksi = 'usulan_harga'")!['n'], 2);
+    });
+
+    test('kasir dengan PIN SPV di layar yang sama: langsung berlaku, SPV tercatat', () {
+      final id = masukkanGula();
+      final hasil = HargaRepo(db).ubahHarga(
           cabang: cabang, barangId: id, hargaBaru: 15000, grosir: const [], alasan: 'Promo', oleh: kasir, disetujuiOleh: spv);
+      expect(hasil, isNull);
       expect(katalog.detail(id, cabang.id)!.harga!.eceran, 15000);
       final log = db.satu("SELECT * FROM log_aktivitas WHERE aksi = 'ubah_harga'")!;
+      expect(log['disetujui_oleh'], spv.id);
+      expect(() => HargaRepo(db).ubahHarga(cabang: cabang, barangId: id, hargaBaru: 14000, grosir: const [], alasan: 'Promo', oleh: kasir, disetujuiOleh: kasir),
+          throwsStateError);
+    });
+
+    test('usulan: kasir tidak boleh memutuskan; keputusan pertama yang berlaku; tolak = harga tetap', () {
+      final id = masukkanGula();
+      final repo = HargaRepo(db);
+      final u1 = repo.ubahHarga(cabang: cabang, barangId: id, hargaBaru: 15000, grosir: const [], alasan: 'Promo', oleh: kasir)!;
+      expect(() => repo.putuskanUsulan(usulanId: u1, setuju: true, oleh: kasir), throwsStateError);
+      jam.maju();
+      repo.putuskanUsulan(usulanId: u1, setuju: false, oleh: spv);
+      expect(katalog.detail(id, cabang.id)!.harga!.eceran, 17500);
+      expect(repo.daftarUsulan(cabang.id).single.status, 'ditolak');
+      expect(() => repo.putuskanUsulan(usulanId: u1, setuju: true, oleh: admin), throwsStateError, reason: 'sudah diputuskan');
+      expect(katalog.detail(id, cabang.id)!.harga!.eceran, 17500);
+      expect(repo.jumlahUsulanMenunggu(cabang.id), 0);
+      final log = db.satu("SELECT * FROM log_aktivitas WHERE aksi = 'usulan_harga_ditolak'")!;
+      expect(log['pengguna_id'], kasir.id);
       expect(log['disetujui_oleh'], spv.id);
     });
 

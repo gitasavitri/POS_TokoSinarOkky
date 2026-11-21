@@ -183,7 +183,7 @@ class LaporanRepo {
 
   /// Hal yang perlu dicek SPV/Admin: pembatalan, akun terkunci, koreksi menunggu, perubahan harga, selisih kas,
   /// shift menunggu dihitung, retur/tukar yang diproses kasir (revisi F).
-  ({int batal, int terkunci, int koreksiMenunggu, int ubahHarga, int selisihKas, int shiftMenunggu, int returKasir}) perluDicek(
+  ({int batal, int terkunci, int koreksiMenunggu, int usulanHarga, int ubahHarga, int selisihKas, int shiftMenunggu, int returKasir}) perluDicek(
       String cabangId, DateTime dari, DateTime sampai) {
     int n(String sql, List<Object?> p) => _db.satu(sql, p)!['n']! as int;
     final a = isoUtc(dari), b = isoUtc(sampai);
@@ -197,6 +197,7 @@ class LaporanRepo {
           "SELECT COUNT(*) AS n FROM koreksi_barang_masuk k JOIN barang_masuk_item i ON i.id = k.barang_masuk_item_id"
           " JOIN barang_masuk bm ON bm.id = i.barang_masuk_id WHERE bm.cabang_id = ? AND k.status = 'menunggu'",
           [cabangId]),
+      usulanHarga: n("SELECT COUNT(*) AS n FROM usulan_harga WHERE cabang_id = ? AND status = 'menunggu'", [cabangId]),
       ubahHarga: n(
           "SELECT COUNT(*) AS n FROM harga_jual WHERE cabang_id = ? AND sumber = 'ubah_harga' AND created_at >= ? AND created_at < ?",
           [cabangId, a, b]),

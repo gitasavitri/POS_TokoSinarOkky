@@ -190,6 +190,9 @@ const _namaAksi = {
   'tambah_barang': 'Tambah barang',
   'ubah_barang': 'Ubah data barang',
   'ubah_harga': 'Ubah harga',
+  'usulan_harga': 'Usulan harga (kasir)',
+  'usulan_harga_disetujui': 'Usulan harga disetujui',
+  'usulan_harga_ditolak': 'Usulan harga ditolak',
   'minta_koreksi': 'Minta koreksi',
   'koreksi_disetujui': 'Koreksi disetujui',
   'koreksi_ditolak': 'Koreksi ditolak',
@@ -206,7 +209,7 @@ const _namaAksi = {
 };
 
 const _aksiPenting = {
-  'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'koreksi_disetujui', 'stok_opname', 'retur',
+  'batal_transaksi', 'akun_terkunci', 'login_pin_gagal', 'login_admin_gagal', 'koreksi_disetujui', 'usulan_harga_disetujui', 'stok_opname', 'retur',
   'hitung_ulang_shift', 'kas_keluar', 'tutup_shift_belum_dihitung', 'hitung_amplop_shift',
 };
 
@@ -217,6 +220,10 @@ String ringkasDetail(String aksi, Map<String, Object?> d) {
       return '${d['no_transaksi']} · ${formatRupiah(n('total') ?? 0)} · ${d['alasan']}';
     case 'ubah_harga':
       return '${d['nama']}: ${formatAngka(n('harga_lama') ?? 0)} → ${formatAngka(n('harga_baru') ?? 0)} · ${d['alasan']}';
+    case 'usulan_harga':
+    case 'usulan_harga_disetujui':
+    case 'usulan_harga_ditolak':
+      return '${d['nama'] ?? ''} ${d['harga_lama'] == null ? '' : '${formatAngka(n('harga_lama') ?? 0)} → '}${formatAngka(n('harga_baru') ?? 0)}'.trim();
     case 'tutup_shift':
       return 'kas ${formatAngka(n('kas_dihitung') ?? 0)}, seharusnya ${formatAngka(n('kas_sistem') ?? 0)}, selisih ${formatAngka(n('selisih') ?? 0)}';
     case 'buka_shift':

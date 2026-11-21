@@ -6,7 +6,6 @@ import 'package:pos_core/pos_core.dart';
 import '../../data/model.dart';
 import '../../data/repo/harga_repo.dart';
 import '../../layanan/aplikasi.dart';
-import '../komponen/pin.dart';
 import '../komponen/umum.dart';
 import '../tema.dart';
 import 'transaksi.dart';
@@ -76,24 +75,21 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
     final b = _barang;
     if (b == null) return;
     if (_alasan == null) return tampilkanPesan(context, 'Pilih alasan perubahan.', galat: true);
-    final cek = cekUbahHarga(hargaLama: b.harga!.eceran, hargaBaru: _hargaBaru, hpp: b.hpp);
-    Pengguna? penyetuju;
-    if (cek.perluPinSpv && !bolehMenyetujui(app.penggunaAktif!.peran)) {
-      penyetuju = await mintaPinSpv(context, alasan: cek.alasan!);
-      if (penyetuju == null) return;
-    }
     try {
-      app.harga.ubahHarga(
+      final usulanId = app.harga.ubahHarga(
         cabang: app.cabang,
         barangId: b.id,
         hargaBaru: _hargaBaru,
         grosir: _tingkat,
         alasan: _alasan!,
         oleh: app.penggunaAktif!,
-        disetujuiOleh: penyetuju,
       );
       if (!mounted) return;
-      tampilkanPesan(context, 'Harga ${b.nama} disimpan dan langsung berlaku di kasir.');
+      tampilkanPesan(
+          context,
+          usulanId == null
+              ? 'Harga ${b.nama} disimpan dan langsung berlaku di kasir.'
+              : 'Usulan harga ${b.nama} terkirim ke SPV/Admin. Harga lama tetap berlaku sampai disetujui.');
       setState(() {
         _barang = null;
         _muatAntrean();

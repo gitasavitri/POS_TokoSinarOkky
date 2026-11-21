@@ -54,7 +54,7 @@ class Toko {
     final pg = PenggunaRepo(db);
     final admin = pg.semua(c.id).firstWhere((p) => p.peran == Peran.admin);
     final kasir = pg.ambil(await pg.tambah(cabangId: c.id, nama: 'Siti', peran: Peran.kasir, pin: '482913', olehId: admin.id))!;
-    BarangMasukRepo(db).kirim(cabang: c, oleh: kasir, draft: DraftBarangMasuk(supplierId: idSupplierTokoUtama, noFaktur: 'F-1', item: [
+    BarangMasukRepo(db).kirim(cabang: c, oleh: admin, draft: DraftBarangMasuk(supplierId: idSupplierTokoUtama, noFaktur: 'F-1', item: [
       DraftItemMasuk(barcode: '8990001', nama: 'Gula Pasir 1 kg', kategoriId: kategoriAwal['Sembako']!, satuan: 'pak', jumlah: 50, hpp: 16200, hargaJual: 17500),
       DraftItemMasuk(barcode: '8990003', nama: 'Sabun Mandi 85 g', kategoriId: kategoriAwal['Sabun & Sampo']!, satuan: 'pcs', jumlah: 40, hpp: 3100, hargaJual: 4000),
     ]));

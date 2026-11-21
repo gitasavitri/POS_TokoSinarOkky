@@ -19,6 +19,7 @@ import 'halaman/retur.dart';
 import 'halaman/setup_awal.dart';
 import 'halaman/shift.dart';
 import 'halaman/transaksi.dart';
+import 'halaman/usulan_harga.dart';
 import 'halaman/ubah_harga.dart';
 import 'komponen/kerangka.dart';
 import 'komponen/umum.dart';
@@ -280,6 +281,7 @@ class _HalamanAdminState extends State<HalamanAdmin> {
       MenuAdmin.beranda => const SizedBox(),
       MenuAdmin.barangMasuk => const IsiBarangMasuk(),
       MenuAdmin.ubahHarga => const IsiUbahHarga(),
+      MenuAdmin.usulanHarga => const IsiUsulanHarga(),
       MenuAdmin.koreksi => const IsiKoreksi(),
       MenuAdmin.produk => const IsiProduk(),
       MenuAdmin.order => const IsiOrderBarang(),

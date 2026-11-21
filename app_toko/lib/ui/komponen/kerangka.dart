@@ -18,6 +18,7 @@ enum MenuAdmin {
   shiftMenunggu('Shift menunggu dihitung', Icons.mark_email_unread, GrupAdmin.penjualan, Warna.oranyeTua, Warna.oranyeMuda),
   barangMasuk('Barang masuk', Icons.local_shipping, GrupAdmin.barang, Warna.toska, Warna.toskaMuda),
   ubahHarga('Ubah harga', Icons.sell, GrupAdmin.barang, Warna.coklat, Warna.coklatMuda),
+  usulanHarga('Persetujuan harga', Icons.price_check, GrupAdmin.barang, Warna.coklat, Warna.coklatMuda),
   koreksi('Koreksi barang masuk', Icons.fact_check, GrupAdmin.barang, Warna.ungu, Warna.unguMuda),
   produk('Produk & stok', Icons.inventory_2, GrupAdmin.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
   order('Order barang', Icons.shopping_cart, GrupAdmin.barang, Warna.oranyeTua, Warna.oranyeMuda),

@@ -58,7 +58,7 @@ class Toko {
     final kat = katalog.kategori().firstWhere((k) => k.nama == 'Sembako');
     BarangMasukRepo(db).kirim(
       cabang: cabang,
-      oleh: kasir,
+      oleh: admin,
       draft: DraftBarangMasuk(supplierId: idSupplierTokoUtama, noFaktur: 'F-001', item: [
         DraftItemMasuk(
           barcode: barcode,

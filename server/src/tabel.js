@@ -3,7 +3,7 @@
 // mode:
 //   tambah  – tabel riwayat: baris hanya ditambah; kiriman ulang dengan id sama diabaikan.
 //   ubah    – data master dengan kolom updated_at: versi yang lebih baru menang.
-//   status  – koreksi_barang_masuk: hanya boleh berubah dari 'menunggu' ke keputusan.
+//   status  – koreksi_barang_masuk, usulan_harga: hanya boleh berubah dari 'menunggu' ke keputusan.
 //   draft   – barang_masuk: boleh berubah selama status 'draft', terkunci setelah 'terkirim'.
 //
 // cabang: dari mana server tahu baris ini milik cabang mana (untuk mencegah toko A menulis data toko B).
@@ -36,6 +36,7 @@ export const TABEL = {
       'barang_masuk_item_id',
     ),
   },
+  usulan_harga: { kunci: ['id'], mode: 'status', cabang: { jenis: 'kolom' } },
   shift: { kunci: ['id'], mode: 'tambah', cabang: { jenis: 'kolom' } },
   shift_tutup: { kunci: ['shift_id'], mode: 'tambah', cabang: induk('SELECT cabang_id FROM shift WHERE id = ?', 'shift_id') },
   kas_shift: { kunci: ['id'], mode: 'tambah', cabang: { jenis: 'kolom' } },

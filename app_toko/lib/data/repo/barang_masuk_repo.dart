@@ -230,19 +230,44 @@ class BarangMasukRepo {
             [hid, cabang.id, barangIds[it]!, hppBaru, bmId, t]);
         _db.outbox('hpp_barang', hid);
         if (it.hargaBerubah) {
-          hargaRepo.tulisHarga(
-            cabangId: cabang.id,
-            barangId: barangIds[it]!,
-            harga: it.hargaJual,
-            grosir: it.grosir,
-            sumber: 'barang_masuk',
-            refId: bmId,
-            alasan: 'Barang masuk faktur ${draft.noFaktur.trim()}',
-            olehId: oleh.id,
-            disetujuiOleh: null,
-          );
-          if (it.asal?.harga != null && it.asal!.harga!.eceran != it.hargaJual) {
-            hargaRepo.tambahAntreanLabel(barangIds[it]!, it.asal!.harga!.eceran, it.hargaJual, oleh.nama);
+          final alasan = 'Barang masuk faktur ${draft.noFaktur.trim()}';
+          if (hargaPerluPersetujuan(oleh.peran)) {
+            // Kasir: stok dan HPP tetap masuk, tapi harga baru hanya usulan. Harga lama berlaku sampai SPV/Admin setuju.
+            hargaRepo.tulisUsulan(
+              cabangId: cabang.id,
+              barangId: barangIds[it]!,
+              hargaLama: it.asal?.harga?.eceran,
+              hargaBaru: it.hargaJual,
+              grosir: it.grosir,
+              hpp: hppBaru,
+              sumber: 'barang_masuk',
+              refId: bmId,
+              alasan: alasan,
+              olehId: oleh.id,
+            );
+            _db.log(cabangId: cabang.id, penggunaId: oleh.id, aksi: 'usulan_harga', detail: {
+              'barang_masuk_id': bmId,
+              'barang_id': barangIds[it]!,
+              'nama': it.nama.trim(),
+              'harga_lama': it.asal?.harga?.eceran,
+              'harga_baru': it.hargaJual,
+              'alasan': alasan,
+            });
+          } else {
+            hargaRepo.tulisHarga(
+              cabangId: cabang.id,
+              barangId: barangIds[it]!,
+              harga: it.hargaJual,
+              grosir: it.grosir,
+              sumber: 'barang_masuk',
+              refId: bmId,
+              alasan: alasan,
+              olehId: oleh.id,
+              disetujuiOleh: null,
+            );
+            if (it.asal?.harga != null && it.asal!.harga!.eceran != it.hargaJual) {
+              hargaRepo.tambahAntreanLabel(barangIds[it]!, it.asal!.harga!.eceran, it.hargaJual, oleh.nama);
+            }
           }
         }
       }

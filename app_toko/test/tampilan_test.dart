@@ -72,7 +72,7 @@ Future<({Aplikasi app, Pengguna admin, Pengguna kasir, Pengguna spv})> _siapkanT
       DraftItemMasuk(barcode: bc, nama: nama, kategoriId: kat[k] ?? kat.values.first, satuan: sat, jumlah: qty, hpp: hpp, hargaJual: jual, grosir: g);
   app.barangMasuk.kirim(
     cabang: c,
-    oleh: kasir,
+    oleh: spv,
     draft: DraftBarangMasuk(supplierId: sup, noFaktur: 'F-CONTOH-01', item: [
       item('8990001', 'Gula Pasir 1 kg', 'Sembako', 'pak', 50, 16200, 17500, const [TingkatGrosir(minQty: 10, harga: 17000), TingkatGrosir(minQty: 50, harga: 16800)]),
       item('8990002', 'Minyak Goreng 2 L', 'Sembako', 'pcs', 3, 33000, 36000),
@@ -362,6 +362,8 @@ void main() {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.admin);
     await _pasang(t, s.app);
+    await t.ensureVisible(find.text(MenuAdmin.laporan.label).first);
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.text(MenuAdmin.laporan.label).first);
     await t.pump(const Duration(milliseconds: 400));
     expect(find.text('PENJUALAN'), findsNothing);
@@ -708,6 +710,8 @@ void main() {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.admin);
     await _pasang(t, s.app);
+    await t.ensureVisible(find.text(MenuAdmin.pengaturan.label).first);
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.text(MenuAdmin.pengaturan.label).first);
     await _tunggu(t);
     await t.scrollUntilVisible(find.text('Modal tetap kasir (Admin)'), 300, scrollable: find.byType(Scrollable).first);
@@ -715,6 +719,8 @@ void main() {
     s.app.keluar();
     s.app.masuk(s.spv);
     await t.pump(const Duration(milliseconds: 400));
+    await t.ensureVisible(find.text(MenuAdmin.pengaturan.label).first);
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.text(MenuAdmin.pengaturan.label).first);
     await _tunggu(t);
     expect(find.text('Modal tetap kasir (Admin)'), findsNothing);
@@ -997,7 +1003,7 @@ void main() {
     final kat = app.katalog.kategori().first.id;
     app.barangMasuk.kirim(
       cabang: c,
-      oleh: s.kasir,
+      oleh: s.spv,
       draft: DraftBarangMasuk(supplierId: app.katalog.supplier().first.id, noFaktur: 'F-CONTOH-02', item: [
         DraftItemMasuk(barcode: '8990004', nama: 'Teh Celup isi 25', kategoriId: kat, satuan: 'kotak', jumlah: 20, hpp: 4500, hargaJual: 6000),
         DraftItemMasuk(barcode: '8990005', nama: 'Gas Elpiji 3 kg', kategoriId: kat, satuan: 'tabung', jumlah: 10, hpp: 18000, hargaJual: 18900),
