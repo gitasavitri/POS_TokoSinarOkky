@@ -397,7 +397,7 @@ describe('Server Pusat', { skip: lewati }, () => {
     const daftar = await minta('GET', '/api/pusat/usulan-harga?status=menunggu', { token: tokenAdmin });
     assert.equal(daftar.status, 200);
     const baris = daftar.isi.find((x) => x.id === u1.id);
-    assert.equal(baris.barang_nama, 'Gula Pasir 1 kg');
+    assert.equal(baris.barang_nama, 'Gula Pasir Premium 1 kg');
     assert.equal(baris.peminta_nama, 'Kasir Contoh');
     assert.equal(baris.turun_per_mil, 142, '17.500 → 15.000 turun 14,2% (dibulatkan ke bawah, sama dengan pos_core)');
     assert.deepEqual(baris.grosir, [{ min_qty: 10, harga: 14000 }]);
