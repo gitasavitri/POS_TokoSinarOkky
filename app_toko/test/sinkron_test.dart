@@ -17,6 +17,7 @@ import 'package:app_toko/data/repo/pengaturan_repo.dart';
 import 'package:app_toko/data/repo/pengguna_repo.dart';
 import 'package:app_toko/data/repo/penjualan_repo.dart';
 import 'package:app_toko/data/repo/setup_repo.dart';
+import 'package:app_toko/data/repo/harga_repo.dart';
 import 'package:app_toko/data/repo/sinkron_repo.dart';
 import 'package:app_toko/layanan/sinkron.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -193,6 +194,58 @@ void main() {
       expect(h.eceran, 18000);
       expect(h.grosir.single.harga, 17500);
       expect(hitungHargaBaris(h, 12).hargaSatuan, 17500, reason: 'harga grosir pusat dipakai di kasir');
+    });
+
+    test('usulan harga kasir diputuskan Admin pusat: harga baru berlaku, usulan ikut diputuskan, tidak masuk outbox', () async {
+      var sekarang = DateTime.utc(2026, 11, 21, 8);
+      final tk = await Toko.baru('A01', jam: () => sekarang);
+      final id = tk.barangMasukDanJual();
+      final repo = HargaRepo(tk.db);
+      final usulanId = repo.ubahHarga(
+          cabang: tk.cabang, barangId: id, hargaBaru: 17000, grosir: const [TingkatGrosir(minQty: 10, harga: 16500)], alasan: 'Promo', oleh: tk.kasir)!;
+      expect(tk.katalog.hargaBerlaku(id, tk.cabang.id)!.$2.eceran, 17500, reason: 'harga lama tetap berlaku selama usulan menunggu');
+      final outboxSebelum = tk.sinkron.jumlahAntrean();
+
+      sekarang = DateTime.utc(2026, 11, 21, 10);
+      final hargaId = buatId();
+      final h = tk.sinkron.terapkan([
+        ubahan('pengguna', penggunaPusat),
+        ubahan('harga_jual', {
+          'id': hargaId, 'barang_id': id, 'cabang_id': tk.cabang.id, 'harga': 17000, 'sumber': 'ubah_harga', 'ref_id': null, 'alasan': 'Promo',
+          'dibuat_oleh': tk.kasir.id, 'disetujui_oleh': adminPusat, 'berlaku_mulai': '2026-11-21T09:00:00Z', 'created_at': '2026-11-21T09:00:00Z',
+        }),
+        ubahan('harga_grosir', {'id': buatId(), 'harga_jual_id': hargaId, 'min_qty': 10, 'harga': 16500, 'created_at': '2026-11-21T09:00:00Z'}),
+        ubahan('usulan_harga', {
+          ...tk.db.satu('SELECT * FROM usulan_harga WHERE id = ?', [usulanId])!,
+          'status': 'disetujui', 'diputuskan_oleh': adminPusat, 'diputuskan_di': 'pusat', 'diputuskan_pada': '2026-11-21T09:00:00Z', 'harga_jual_id': hargaId,
+        }),
+      ], kursorBaru: 5, cabangId: tk.cabang.id);
+      expect(h.masalah, isEmpty);
+      expect(h.diterapkan, 4);
+      expect(tk.katalog.hargaBerlaku(id, tk.cabang.id)!.$2.eceran, 17000);
+      final u = repo.daftarUsulan(tk.cabang.id).single;
+      expect(u.status, 'disetujui');
+      expect(u.diputuskanOleh, 'Admin pusat');
+      expect(repo.jumlahUsulanMenunggu(tk.cabang.id), 0);
+      expect(repo.antreanLabel().single.hargaBaru, 17000, reason: 'label rak perlu dicetak ulang');
+      expect(tk.sinkron.jumlahAntrean(), outboxSebelum, reason: 'keputusan pusat tidak dikirim balik');
+    });
+
+    test('usulan yang sudah diputuskan di toko tidak diubah oleh keputusan pusat yang datang belakangan; usulan toko lain diabaikan', () async {
+      final tk = await Toko.baru('A01');
+      final id = tk.barangMasukDanJual();
+      final repo = HargaRepo(tk.db);
+      final usulanId = repo.ubahHarga(cabang: tk.cabang, barangId: id, hargaBaru: 16000, grosir: const [], alasan: 'Promo', oleh: tk.kasir)!;
+      repo.putuskanUsulan(usulanId: usulanId, setuju: false, oleh: tk.admin);
+      final baris = tk.db.satu('SELECT * FROM usulan_harga WHERE id = ?', [usulanId])!;
+      final h = tk.sinkron.terapkan([
+        ubahan('pengguna', penggunaPusat),
+        ubahan('usulan_harga', {...baris, 'status': 'disetujui', 'diputuskan_oleh': adminPusat, 'diputuskan_di': 'pusat'}),
+        ubahan('usulan_harga', {...baris, 'id': buatId(), 'cabang_id': buatId()}),
+      ], kursorBaru: 3, cabangId: tk.cabang.id);
+      expect(h.diterapkan, 1, reason: 'hanya akun pusat yang diterapkan');
+      expect(repo.daftarUsulan(tk.cabang.id).single.status, 'ditolak');
+      expect(tk.katalog.hargaBerlaku(id, tk.cabang.id)!.$2.eceran, 17500);
     });
 
     test('akun Admin pusat tidak bisa dipakai masuk di toko, dan nama penggunanya tidak bentrok', () async {

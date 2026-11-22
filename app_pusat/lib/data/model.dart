@@ -286,3 +286,78 @@ class HasilSalinBarang {
         hargaDisalin: (j['harga_disalin'] as num?)?.toInt() ?? 0,
       );
 }
+
+/// Usulan perubahan harga dari kasir yang menunggu (atau sudah diputuskan oleh) SPV/Admin.
+class UsulanHargaPusat {
+  const UsulanHargaPusat({
+    required this.id,
+    required this.cabangId,
+    required this.kodeCabang,
+    required this.namaCabang,
+    required this.barangNama,
+    required this.satuan,
+    required this.hargaLama,
+    required this.hargaBaru,
+    required this.grosir,
+    required this.hpp,
+    required this.alasan,
+    required this.peminta,
+    required this.status,
+    required this.dibuat,
+    this.pemutus,
+    this.diputuskanDi,
+    this.diputuskanPada,
+  });
+  factory UsulanHargaPusat.dariJson(Map<String, Object?> j) => UsulanHargaPusat(
+        id: j['id']! as String,
+        cabangId: j['cabang_id']! as String,
+        kodeCabang: j['cabang_kode']! as String,
+        namaCabang: j['cabang_nama']! as String,
+        barangNama: j['barang_nama']! as String,
+        satuan: (j['satuan'] as String?) ?? '',
+        hargaLama: j['harga_lama'] == null ? null : _int(j['harga_lama']),
+        hargaBaru: _int(j['harga_baru']),
+        grosir: [for (final g in (j['grosir'] as List? ?? const [])) TingkatGrosir(minQty: _int((g as Map)['min_qty']), harga: _int(g['harga']))],
+        hpp: j['hpp'] == null ? null : _int(j['hpp']),
+        alasan: (j['alasan'] as String?) ?? '',
+        peminta: (j['peminta_nama'] as String?) ?? '-',
+        status: j['status']! as String,
+        dibuat: _waktu(j['created_at'])!,
+        pemutus: j['pemutus_nama'] as String?,
+        diputuskanDi: j['diputuskan_di'] as String?,
+        diputuskanPada: _waktu(j['diputuskan_pada']),
+      );
+  final String id;
+  final String cabangId;
+  final String kodeCabang;
+  final String namaCabang;
+  final String barangNama;
+  final String satuan;
+  final int? hargaLama;
+  final int hargaBaru;
+  final List<TingkatGrosir> grosir;
+  final int? hpp;
+  final String alasan;
+  final String peminta;
+  final String status;
+  final DateTime dibuat;
+  final String? pemutus;
+  final String? diputuskanDi;
+  final DateTime? diputuskanPada;
+
+  bool get menunggu => status == statusUsulanMenunggu;
+
+  /// Per-mil turun (156 = 15,6%); negatif kalau naik; 0 kalau belum ada harga lama. Sama dengan Aplikasi Toko.
+  int get turunPerMilNilai => hargaLama == null ? 0 : turunPerMil(hargaLama!, hargaBaru);
+
+  /// Peringatan untuk pemutus: harga ≤ HPP atau turun lebih dari 10%.
+  String? get peringatan {
+    final h = hpp;
+    if (h != null && h > 0 && hargaBaru <= h) return 'Harga usulan di bawah atau sama dengan HPP (${formatRupiah(h)}).';
+    if (hargaLama != null && turunPerMilNilai > 100) return 'Harga turun lebih dari 10%.';
+    return null;
+  }
+
+  /// Nama yang memutuskan: "Admin pusat" kalau dari pusat.
+  String get namaPemutus => diputuskanDi == 'pusat' ? 'Admin pusat' : (pemutus ?? '-');
+}

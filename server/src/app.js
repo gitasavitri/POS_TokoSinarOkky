@@ -4,6 +4,7 @@ import express from 'express';
 import { buatKodePendaftaran, cekPerangkat, cekSesi, daftarPerangkat as daftarkanPerangkat, keluarAdmin, masukAdmin } from './akun.js';
 import { satu, transaksi } from './db.js';
 import * as pusat from './pusat.js';
+import * as usulan from './usulan.js';
 import { MAKS_AMBIL, MAKS_KIRIM, ambilPerubahan, terimaKiriman } from './sinkron.js';
 import { GalatPengguna, isoUtc, wajib } from './umum.js';
 
@@ -102,6 +103,11 @@ export function buatApp(pool, { trustProxy = false, catatGalat = console.error, 
     res.json(await transaksi(pool, (kon) => pusat.salinDaftarBarang(kon, req.body ?? {}, req.admin.id))),
   );
   r.post('/harga', async (req, res) => res.status(201).json(await pusat.ubahHargaPusatTransaksi(pool, req.body ?? {}, req.admin.id)));
+
+  r.get('/usulan-harga', async (req, res) => res.json(await usulan.daftarUsulan(pool, req.query)));
+  r.post('/usulan-harga/:id/putuskan', async (req, res) =>
+    res.json(await transaksi(pool, (kon) => usulan.putuskanUsulan(kon, { id: req.params.id, setuju: req.body?.setuju }, req.admin.id))),
+  );
 
   r.get('/ringkasan', async (req, res) => res.json(await pusat.ringkasan(pool, req.query)));
   r.get('/penjualan-harian', async (req, res) => res.json(await pusat.penjualanHarian(pool, req.query)));

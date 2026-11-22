@@ -29,6 +29,29 @@ class ApiPalsu implements ApiPusat {
   @override
   Future<void> keluar() async {}
 
+  final usulanContoh = <UsulanHargaPusat>[];
+  final keputusan = <({String id, bool setuju})>[];
+
+  @override
+  Future<List<UsulanHargaPusat>> usulanHarga({String? status}) => _jawab([
+        for (final u in usulanContoh)
+          if (status == null || u.status == status) u,
+      ]);
+
+  @override
+  Future<void> putuskanUsulanHarga(String id, {required bool setuju}) async {
+    if (sesiHabis) throw const GalatServer('Sesi berakhir, silakan masuk lagi', status: 401);
+    final i = usulanContoh.indexWhere((u) => u.id == id);
+    if (i < 0 || !usulanContoh[i].menunggu) throw const GalatServer('Usulan sudah ditolak (di toko).', status: 409);
+    keputusan.add((id: id, setuju: setuju));
+    final u = usulanContoh[i];
+    usulanContoh[i] = UsulanHargaPusat(
+      id: u.id, cabangId: u.cabangId, kodeCabang: u.kodeCabang, namaCabang: u.namaCabang, barangNama: u.barangNama, satuan: u.satuan,
+      hargaLama: u.hargaLama, hargaBaru: u.hargaBaru, grosir: u.grosir, hpp: u.hpp, alasan: u.alasan, peminta: u.peminta,
+      status: setuju ? statusUsulanDisetujui : statusUsulanDitolak, dibuat: u.dibuat, diputuskanDi: 'pusat', diputuskanPada: sekarang,
+    );
+  }
+
   @override
   Future<List<CabangPusat>> cabang() => _jawab(cabangContoh);
 

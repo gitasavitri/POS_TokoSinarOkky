@@ -208,6 +208,8 @@ class HargaRepo {
     return id;
   }
 
+  static String? _namaPemutus(String? nama, String? di) => di == 'pusat' ? 'Admin pusat' : nama;
+
   UsulanHargaBaris _usulanDari(Map<String, Object?> r) => UsulanHargaBaris(
         id: r['id'] as String,
         cabangId: r['cabang_id'] as String,
@@ -226,7 +228,7 @@ class HargaRepo {
         dimintaOleh: r['peminta'] as String,
         status: r['status'] as String,
         dibuat: DateTime.parse(r['created_at'] as String),
-        diputuskanOleh: r['pemutus'] as String?,
+        diputuskanOleh: _namaPemutus(r['pemutus'] as String?, r['diputuskan_di'] as String?),
         diputuskanPada: r['diputuskan_pada'] == null ? null : DateTime.parse(r['diputuskan_pada'] as String),
       );
 

@@ -380,4 +380,64 @@ describe('Server Pusat', { skip: lewati }, () => {
     assert.equal(r.status, 400);
     assert.equal((await minta('GET', '/api/tidak-ada')).status, 404);
   });
+  test('usulan harga kasir: Admin pusat menyetujui, harga sampai ke toko; keputusan kedua ditolak', async () => {
+    const t = '2026-11-21T02:00:00Z';
+    const usulan = (jumlahHarga, ekstra = {}) => ({
+      id: crypto.randomUUID(), cabang_id: A.cabang.id, barang_id: A.barang.id, harga_lama: 17500, harga_baru: jumlahHarga,
+      grosir_json: '[[10,14000]]', hpp: 16200, sumber: 'ubah_harga', ref_id: null, alasan: 'Promo', diminta_oleh: A.kasir.id,
+      status: 'menunggu', diputuskan_oleh: null, diputuskan_di: null, diputuskan_pada: null, harga_jual_id: null, created_at: t, ...ekstra,
+    });
+    const u1 = usulan(15000);
+    const u2 = usulan(16000);
+    const kirim = await minta('POST', '/api/sinkron/kirim', { token: perangkat.A.token, isi: { item: [item('usulan_harga', u1), item('usulan_harga', u2)] } });
+    assert.equal(kirim.isi.diterima.length, 2, JSON.stringify(kirim.isi));
+
+    const tanpaToken = await minta('GET', '/api/pusat/usulan-harga?status=menunggu');
+    assert.equal(tanpaToken.status, 401);
+    const daftar = await minta('GET', '/api/pusat/usulan-harga?status=menunggu', { token: tokenAdmin });
+    assert.equal(daftar.status, 200);
+    const baris = daftar.isi.find((x) => x.id === u1.id);
+    assert.equal(baris.barang_nama, 'Gula Pasir 1 kg');
+    assert.equal(baris.peminta_nama, 'Kasir Contoh');
+    assert.equal(baris.turun_per_mil, 142, '17.500 → 15.000 turun 14,2% (dibulatkan ke bawah, sama dengan pos_core)');
+    assert.deepEqual(baris.grosir, [{ min_qty: 10, harga: 14000 }]);
+
+    const { kursor } = await ambil('A');
+    const ok = await minta('POST', `/api/pusat/usulan-harga/${u1.id}/putuskan`, { token: tokenAdmin, isi: { setuju: true } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.isi));
+    assert.equal(ok.isi.status, 'disetujui');
+    const [[hj]] = await db.pool.query('SELECT * FROM harga_jual WHERE id = ?', [ok.isi.harga_jual_id]);
+    assert.equal(hj.harga, 15000);
+    assert.equal(hj.cabang_id, A.cabang.id);
+    assert.equal(hj.dibuat_oleh, A.kasir.id);
+    assert.equal(hj.disetujui_oleh, admin.id);
+    const [[g]] = await db.pool.query('SELECT min_qty, harga FROM harga_grosir WHERE harga_jual_id = ?', [hj.id]);
+    assert.deepEqual({ min_qty: g.min_qty, harga: g.harga }, { min_qty: 10, harga: 14000 });
+
+    const p = await ambil('A', kursor);
+    const tarik = p.perubahan.find((x) => x.tabel === 'usulan_harga' && x.baris.id === u1.id);
+    assert.equal(tarik?.baris.status, 'disetujui', 'keputusan pusat sampai ke PC toko');
+    assert.equal(tarik.baris.diputuskan_di, 'pusat');
+    assert.equal(tarik.baris.harga_jual_id, hj.id);
+    const urutHarga = p.perubahan.findIndex((x) => x.tabel === 'harga_jual' && x.baris.id === hj.id);
+    assert.ok(urutHarga >= 0 && urutHarga < p.perubahan.indexOf(tarik), 'harga_jual datang sebelum usulan yang menunjuknya');
+
+    const kedua = await minta('POST', `/api/pusat/usulan-harga/${u1.id}/putuskan`, { token: tokenAdmin, isi: { setuju: false } });
+    assert.equal(kedua.status, 409);
+    assert.match(kedua.isi.galat, /sudah disetujui/);
+
+    // Toko lebih dulu memutuskan u2 → keputusan pusat ditolak dan keputusan toko tidak tertimpa.
+    const diToko = { ...u2, status: 'ditolak', diputuskan_oleh: A.admin.id, diputuskan_di: 'toko', diputuskan_pada: '2026-11-21T03:00:00Z' };
+    await minta('POST', '/api/sinkron/kirim', { token: perangkat.A.token, isi: { item: [item('usulan_harga', diToko)] } });
+    const lambat = await minta('POST', `/api/pusat/usulan-harga/${u2.id}/putuskan`, { token: tokenAdmin, isi: { setuju: true } });
+    assert.equal(lambat.status, 409);
+    assert.match(lambat.isi.galat, /sudah ditolak.*di toko/);
+    const [[x2]] = await db.pool.query('SELECT status, diputuskan_di FROM usulan_harga WHERE id = ?', [u2.id]);
+    assert.deepEqual({ status: x2.status, diputuskan_di: x2.diputuskan_di }, { status: 'ditolak', diputuskan_di: 'toko' });
+
+    const salahId = await minta('POST', '/api/pusat/usulan-harga/bukan-uuid/putuskan', { token: tokenAdmin, isi: { setuju: true } });
+    assert.equal(salahId.status, 400);
+    const tanpaPilihan = await minta('POST', `/api/pusat/usulan-harga/${u2.id}/putuskan`, { token: tokenAdmin, isi: {} });
+    assert.equal(tanpaPilihan.status, 400);
+  });
 });

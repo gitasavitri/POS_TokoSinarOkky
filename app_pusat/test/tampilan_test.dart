@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:app_pusat/data/model.dart';
 import 'package:app_pusat/layanan/sesi.dart';
 import 'package:app_pusat/ui/akar.dart';
 import 'package:flutter/material.dart';
@@ -187,6 +188,49 @@ void main() {
     await t.tap(find.byKey(const ValueKey('salin-barang-ya')));
     await t.pump(const Duration(milliseconds: 300));
     expect(api.salinan.last, (ke: 'c3', dari: null), reason: 'semua barang = tanpa toko asal');
+    await sesi.keluar();
+  });
+
+  testWidgets('persetujuan harga: Admin pusat menyetujui usulan kasir; usulan yang sudah diputuskan di toko ditolak server', (t) async {
+    UsulanHargaPusat usulan(String id, String barang, int baru) => UsulanHargaPusat(
+          id: id, cabangId: 'c1', kodeCabang: 'A01', namaCabang: 'Contoh Satu', barangNama: barang, satuan: 'pak', hargaLama: 17500, hargaBaru: baru,
+          grosir: const [TingkatGrosir(minQty: 10, harga: 14000)], hpp: 16200, alasan: 'Promo', peminta: 'Kasir Contoh', status: 'menunggu',
+          dibuat: DateTime.now().toUtc(),
+        );
+    final (sesi, api) = await _pasang(t);
+    api.usulanContoh.addAll([usulan('u1', 'Gula Pasir 1 kg', 14750), usulan('u2', 'Minyak Goreng 1 L', 15000)]);
+    await t.tap(_ubin(MenuPusat.persetujuan));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Gula Pasir 1 kg'), findsWidgets);
+    expect(find.textContaining('Turun 15,7%'), findsWidgets);
+    expect(find.textContaining('di bawah atau sama dengan HPP'), findsOneWidget, reason: '14.750 ≤ HPP 16.200 diberi peringatan');
+    await _foto(t, '50-persetujuan-harga');
+
+    await t.tap(find.byKey(const ValueKey('setujui')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.tap(find.text('Setujui').last);
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(api.keputusan.single, (id: 'u1', setuju: true));
+    expect(find.textContaining('Harga disetujui'), findsOneWidget);
+
+    // u2 sudah diputuskan di toko lebih dulu → server menolak, pesan tampil, daftar dimuat ulang.
+    final i = api.usulanContoh.indexWhere((u) => u.id == 'u2');
+    final u2 = api.usulanContoh[i];
+    await t.tap(find.byKey(const ValueKey('tolak')));
+    await t.pump(const Duration(milliseconds: 300));
+    api.usulanContoh[i] = UsulanHargaPusat(
+      id: u2.id, cabangId: u2.cabangId, kodeCabang: u2.kodeCabang, namaCabang: u2.namaCabang, barangNama: u2.barangNama, satuan: u2.satuan,
+      hargaLama: u2.hargaLama, hargaBaru: u2.hargaBaru, grosir: u2.grosir, hpp: u2.hpp, alasan: u2.alasan, peminta: u2.peminta,
+      status: 'ditolak', dibuat: u2.dibuat, diputuskanDi: 'toko',
+    );
+    await t.tap(find.text('Tolak').last);
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Usulan sudah ditolak (di toko)'), findsOneWidget);
+    expect(api.keputusan.length, 1, reason: 'keputusan kedua tidak tercatat');
     await sesi.keluar();
   });
 

@@ -36,6 +36,10 @@ abstract class ApiPusat {
   Future<List<StokBarang>> stok(String cabangId, {String kata = ''});
   Future<List<KaryawanPusat>> karyawan({String? cabangId});
   Future<List<LogPusat>> log(DateTime dari, DateTime sampai, {String? cabangId});
+
+  /// Usulan harga dari kasir. [status] null = semua.
+  Future<List<UsulanHargaPusat>> usulanHarga({String? status});
+  Future<void> putuskanUsulanHarga(String id, {required bool setuju});
 }
 
 /// Implementasi sungguhan lewat HTTPS.
@@ -154,6 +158,15 @@ class ApiHttp implements ApiPusat {
     });
     return [for (final p in (r['peringatan'] as List? ?? const [])) '$p'];
   }
+
+  @override
+  Future<List<UsulanHargaPusat>> usulanHarga({String? status}) async => [
+        for (final j in await _daftar('/api/pusat/usulan-harga', {'status': ?status})) UsulanHargaPusat.dariJson(j),
+      ];
+
+  @override
+  Future<void> putuskanUsulanHarga(String id, {required bool setuju}) =>
+      _minta('POST', '/api/pusat/usulan-harga/$id/putuskan', isi: {'setuju': setuju});
 
   @override
   Future<List<BarangKembar>> barangKembar() async => [

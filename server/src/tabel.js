@@ -57,7 +57,7 @@ export const TABEL = {
 
 /** Tabel yang dikirim dari server ke toko (data barang & harga, akun, info cabang). Urutan tidak penting:
  *  toko menerapkannya menurut urutan perubahan (seq). */
-export const TABEL_TARIK = new Set(['cabang', 'pengguna', 'kategori', 'barang', 'barang_cabang', 'harga_jual', 'harga_grosir']);
+export const TABEL_TARIK = new Set(['cabang', 'pengguna', 'kategori', 'barang', 'barang_cabang', 'harga_jual', 'harga_grosir', 'usulan_harga']);
 
 /** baris_id untuk kunci gabungan memakai '|' (sama seperti outbox di Aplikasi Toko). */
 export const barisIdDari = (def, baris) => def.kunci.map((k) => baris[k]).join('|');

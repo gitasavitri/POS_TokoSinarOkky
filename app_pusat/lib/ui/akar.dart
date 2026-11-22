@@ -8,6 +8,7 @@ import '../layanan/sesi.dart';
 import 'halaman/barang.dart';
 import 'halaman/karyawan.dart';
 import 'halaman/log.dart';
+import 'halaman/persetujuan.dart';
 import 'halaman/ringkasan.dart';
 import 'halaman/stok.dart';
 import 'halaman/toko.dart';
@@ -232,6 +233,7 @@ enum MenuPusat {
   ringkasan('Ringkasan semua toko', Icons.space_dashboard, GrupPusat.penjualan, Warna.utama, Color(0xFFDCEBFC)),
   transaksi('Transaksi', Icons.receipt_long, GrupPusat.penjualan, Warna.hijauIkon, Warna.hijauIkonMuda),
   barang('Barang & harga', Icons.sell, GrupPusat.barang, Warna.coklat, Warna.coklatMuda),
+  persetujuan('Persetujuan harga', Icons.price_check, GrupPusat.barang, Warna.merah, Color(0xFFFBE4E1)),
   stok('Stok per toko', Icons.inventory, GrupPusat.barang, Warna.hijauIkon, Warna.hijauIkonMuda),
   toko('Toko & perangkat', Icons.storefront, GrupPusat.toko, Warna.ungu, Warna.unguMuda),
   karyawan('Karyawan', Icons.badge, GrupPusat.toko, Warna.toska, Warna.toskaMuda),
@@ -270,6 +272,7 @@ class _HalamanUtamaState extends State<HalamanUtama> {
       MenuPusat.ringkasan => const IsiRingkasan(),
       MenuPusat.transaksi => const IsiTransaksi(),
       MenuPusat.barang => const IsiBarang(),
+      MenuPusat.persetujuan => const IsiPersetujuan(),
       MenuPusat.stok => const IsiStok(),
       MenuPusat.toko => const IsiToko(),
       MenuPusat.karyawan => const IsiKaryawan(),

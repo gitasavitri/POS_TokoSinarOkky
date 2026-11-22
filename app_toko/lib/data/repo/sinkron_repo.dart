@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:pos_core/pos_core.dart';
+
 import '../database.dart';
+import 'harga_repo.dart';
 import 'pengaturan_repo.dart';
 
 /// Satu baris outbox yang siap dikirim ke Server Pusat.
@@ -148,9 +151,34 @@ class SinkronRepo {
         if (_ada('harga_grosir', 'id', b['id'])) return false;
         _insert('harga_grosir', b);
         return true;
+      case 'usulan_harga':
+        return _terapkanUsulanHarga(b, cabangId);
       default:
         return false;
     }
+  }
+
+  /// Usulan harga dari server: usulan yang belum ada di PC ini ditambahkan. Yang masih menunggu di sini dan sudah
+  /// diputuskan di server (mis. Admin pusat menyetujui) ikut diputuskan, tanpa menulis outbox (keputusannya sudah di server).
+  /// Yang sudah diputuskan di PC ini tidak diubah lagi: keputusan pertama yang sampai ke server yang berlaku.
+  bool _terapkanUsulanHarga(Map<String, Object?> b, String cabangId) {
+    if (b['cabang_id'] != cabangId) return false;
+    final lokal = _db.satu('SELECT status FROM usulan_harga WHERE id = ?', [b['id']]);
+    if (lokal == null) {
+      _insert('usulan_harga', b);
+      return true;
+    }
+    if (lokal['status'] != statusUsulanMenunggu || b['status'] == statusUsulanMenunggu) return false;
+    _db.jalankan(
+      'UPDATE usulan_harga SET status = ?, diputuskan_oleh = ?, diputuskan_di = ?, diputuskan_pada = ?, harga_jual_id = ? WHERE id = ?',
+      [b['status'], b['diputuskan_oleh'], b['diputuskan_di'], b['diputuskan_pada'], b['harga_jual_id'], b['id']],
+    );
+    final lama = b['harga_lama'] as int?;
+    final baru = b['harga_baru'] as int;
+    if (b['status'] == statusUsulanDisetujui && lama != null && lama != baru) {
+      HargaRepo(_db).tambahAntreanLabel(b['barang_id'] as String, lama, baru, 'Admin pusat');
+    }
+    return true;
   }
 
   /// Kategori barang dari pusat: pakai id yang sama kalau ada, kalau tidak cocokkan nama, kalau tidak ada buat baru.
