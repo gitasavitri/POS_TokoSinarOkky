@@ -178,6 +178,24 @@ class _Detail extends StatelessWidget {
         _Baris('Diubah oleh', '${u.peminta} · ${waktuLengkap(u.dibuat.toLocal())}'),
         if (peringatan != null) ...[const SizedBox(height: 10), KotakPesan(peringatan, jenis: JenisPesan.perhatian)],
         const SizedBox(height: 16),
+        if (u.menunggu) ...[
+          OutlinedButton.icon(
+            key: const ValueKey('kirim-wa'),
+            onPressed: () => tawarkanKirimWa(
+              context,
+              pesanWaUsulanHarga(
+                namaToko: u.namaCabang,
+                kodeCabang: u.kodeCabang,
+                item: [ItemUsulanWa(namaBarang: u.barangNama, hargaLama: u.hargaLama, hargaBaru: u.hargaBaru, hpp: u.hpp, diubahOleh: u.peminta, waktu: u.dibuat)],
+              ),
+              judul: 'Teruskan ke WhatsApp?',
+            ),
+            icon: const Icon(Icons.chat),
+            label: const Text('Kirim ke WA'),
+            style: OutlinedButton.styleFrom(foregroundColor: Warna.hijauIkon),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (u.menunggu)
           Row(children: [
             Expanded(

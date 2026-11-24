@@ -244,6 +244,26 @@ class HargaRepo {
       .map(_usulanDari)
       .toList();
 
+  /// Pesan WhatsApp untuk usulan yang masih menunggu: satu usulan ([usulanId]) atau semua dari satu barang masuk ([refId]).
+  /// Null kalau tidak ada usulan yang menunggu.
+  String? pesanWaUsulan(InfoCabang cabang, {String? usulanId, String? refId}) {
+    final dipilih = [
+      for (final u in daftarUsulan(cabang.id, status: statusUsulanMenunggu))
+        if ((usulanId != null && u.id == usulanId) || (refId != null && _refId(u.id) == refId)) u,
+    ];
+    if (dipilih.isEmpty) return null;
+    return pesanWaUsulanHarga(
+      namaToko: cabang.namaToko,
+      kodeCabang: cabang.kode,
+      item: [
+        for (final u in dipilih.reversed)
+          ItemUsulanWa(namaBarang: u.namaBarang, hargaLama: u.hargaLama, hargaBaru: u.hargaBaru, hpp: u.hpp, diubahOleh: u.dimintaOleh, waktu: u.dibuat),
+      ],
+    );
+  }
+
+  String? _refId(String usulanId) => _db.satu('SELECT ref_id FROM usulan_harga WHERE id = ?', [usulanId])?['ref_id'] as String?;
+
   int jumlahUsulanMenunggu(String cabangId) =>
       _db.satu("SELECT COUNT(*) AS n FROM usulan_harga WHERE cabang_id = ? AND status = 'menunggu'", [cabangId])!['n'] as int;
 

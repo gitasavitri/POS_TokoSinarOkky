@@ -207,6 +207,23 @@ void main() {
     expect(find.textContaining('di bawah atau sama dengan HPP'), findsOneWidget, reason: '14.750 ≤ HPP 16.200 diberi peringatan');
     await _foto(t, '50-persetujuan-harga');
 
+    // Kirim ke WA: pesan terisi otomatis dari data usulan, WhatsApp dibuka dengan tautan wa.me.
+    final dibuka = <String>[];
+    pembukaTautanUji = (u) async => dibuka.add(u);
+    addTearDown(() => pembukaTautanUji = null);
+    await t.tap(find.byKey(const ValueKey('kirim-wa')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Barang: Gula Pasir 1 kg'), findsOneWidget);
+    expect(find.textContaining('Toko: Contoh Satu (A01)'), findsOneWidget);
+    await t.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Kirim ke WA')));
+    await t.pump(const Duration(milliseconds: 300));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(Uri.parse(dibuka.single).queryParameters['text'], contains('Diubah oleh: Kasir Contoh'));
+    await t.pump(const Duration(seconds: 5));
+
+    await t.ensureVisible(find.byKey(const ValueKey('setujui')));
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.byKey(const ValueKey('setujui')));
     await t.pump(const Duration(milliseconds: 300));
     await t.pump(const Duration(milliseconds: 300));
@@ -219,6 +236,8 @@ void main() {
     // u2 sudah diputuskan di toko lebih dulu → server menolak, pesan tampil, daftar dimuat ulang.
     final i = api.usulanContoh.indexWhere((u) => u.id == 'u2');
     final u2 = api.usulanContoh[i];
+    await t.ensureVisible(find.byKey(const ValueKey('tolak')));
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.byKey(const ValueKey('tolak')));
     await t.pump(const Duration(milliseconds: 300));
     api.usulanContoh[i] = UsulanHargaPusat(

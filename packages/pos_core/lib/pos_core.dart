@@ -16,5 +16,6 @@ export 'src/shift.dart';
 export 'src/stok.dart';
 export 'src/struk.dart';
 export 'src/uang.dart';
+export 'src/pesan_wa.dart';
 export 'src/usulan_harga.dart';
 export 'src/waktu.dart';

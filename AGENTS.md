@@ -61,9 +61,9 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 | Jual & cetak struk | Ya | Ya | Ya |
 | Beri diskon, batalkan transaksi | PIN SPV | Ya | Ya |
 | Tukar / kembalikan barang (retur) | Ya, ≤ 3 hari dari tanggal struk; lebih → PIN SPV | Ya | Ya |
-| Catat barang masuk, ubah harga jual & grosir lewat barang masuk | Ya | Ya | Ya |
-| Ubah harga tanpa barang masuk: naik | Ya | Ya | Ya |
-| Ubah harga tanpa barang masuk: turun >10% atau ≤ HPP | PIN SPV | Ya | Ya |
+| Catat barang masuk (stok + HPP) | Ya | Ya | Ya |
+| Ubah harga jual & grosir (lewat barang masuk atau Ubah harga), naik maupun turun | Hanya usulan, menunggu SPV/Admin (revisi T) | Langsung berlaku | Langsung berlaku |
+| Setujui / tolak usulan harga kasir | Tidak | Ya (Aplikasi Toko) | Ya (Aplikasi Toko; Admin pusat di Aplikasi Pusat) |
 | Ubah barang masuk yang sudah terkirim (koreksi) | Tidak (hanya minta) | Ya | Ya |
 | Stok opname | Tidak | Ya | Ya |
 | Lihat laporan | Tidak | Toko sendiri | Toko sendiri (app toko) / semua (app pusat) |
@@ -90,7 +90,8 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Saat menjual: pilih tingkat dengan `min_qty` terbesar yang `≤ jumlah` di baris itu. **Harga grosir berlaku untuk seluruh jumlah di baris itu.**
   Contoh: tingkat min 10 = Rp17.000; beli 15 → 15 × Rp17.000.
 - Harga grosir harus lebih murah dari harga eceran dan lebih besar dari HPP. Tingkat berikutnya harus `min_qty` lebih besar.
-- Ubah harga tanpa barang masuk: wajib pilih alasan. Turun lebih dari 10% atau harga ≤ HPP → wajib PIN SPV.
+- Ubah harga tanpa barang masuk: wajib pilih alasan. Kasir tidak pernah mengubah harga langsung: ia membuat **usulan harga** (lihat bagian "Usulan harga"). SPV/Admin langsung berlaku.
+- Turun lebih dari 10% atau harga ≤ HPP: tetap berlaku di kasir kalau SPV/Admin yang mengubah, tapi layar persetujuan memberi peringatan merah kepada yang memutuskan.
 - HPP **tidak** bisa diubah dari layar Ubah harga. HPP hanya berubah lewat barang masuk.
 
 **HPP (asumsi, menunggu keputusan pemilik)**
@@ -100,7 +101,7 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 
 **Barang masuk**
 - Status: `draft` → `terkirim`. Selama `draft` bebas diubah. Setelah `terkirim`, header dan item terkunci (dijaga trigger).
-- Wajib isi nomor faktur. Saat dikirim, dalam satu transaksi database: tulis `mutasi_stok` (jenis `masuk`), `hpp_barang`, `harga_jual` + `harga_grosir` kalau berubah, `log_aktivitas`, `outbox`.
+- Wajib isi nomor faktur. Saat dikirim, dalam satu transaksi database: tulis `mutasi_stok` (jenis `masuk`), `hpp_barang`, `harga_jual` + `harga_grosir` kalau berubah (kalau pengirimnya kasir: baris `usulan_harga` berstatus `menunggu`, harga lama tetap berlaku), `log_aktivitas`, `outbox`.
 - Barang datang lagi = catatan barang masuk **baru**.
 - Koreksi: kasir membuat `koreksi_barang_masuk` berstatus `menunggu`; SPV/Admin menyetujui → sistem menulis `mutasi_stok` jenis `koreksi` sebesar selisihnya.
 - Kategori dipilih dari daftar. Menambah kategori baru: lihat Keputusan terbuka.
@@ -141,6 +142,18 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Hanya SPV/Admin, lewat Barang masuk. Kolom: Barcode, Nama barang, Kategori, Satuan, Jumlah, HPP, Harga jual.
 - Hasilnya SATU barang masuk biasa (terkirim & terkunci): stok, HPP rata-rata, harga, barang baru masuk `barang_cabang`.
 - Barcode yang sudah ada: hanya stok/HPP/harga; nama/kategori/satuan tidak diubah. Baris salah ditandai dan dilewati.
+
+**Usulan harga dari kasir (revisi T, migrasi 006)**
+- Perubahan harga oleh kasir (barang masuk / Ubah harga, naik atau turun, termasuk harga pertama barang baru) → baris `usulan_harga`
+  (`status = 'menunggu'`, snapshot harga lama, HPP, tingkat grosir sebagai JSON `[[min_qty, harga], ...]`) + `outbox`, dalam transaksi yang sama.
+  Stok dan HPP barang masuk tetap langsung masuk; harga lama tetap berlaku di kasir sampai disetujui.
+- SPV/Admin memutuskan di Aplikasi Toko ("Persetujuan harga" / "Perlu dicek"); Admin pusat di Aplikasi Pusat. **Yang memutuskan lebih dulu yang berlaku**;
+  keputusan kedua ditolak (`alasanTidakBolehMemutuskan`, server membalas 409). Kasir tidak boleh memutuskan.
+- Disetujui = baris baru `harga_jual` (+ `harga_grosir`) dengan `dibuat_oleh` = kasir pengusul dan `disetujui_oleh` = pemutus, sumber sama dengan usulan; label rak masuk antrean.
+  Dari pusat: server menulis `harga_jual` khusus toko itu lalu mengubah usulan (tabel `perubahan`), PC toko menerapkan saat sinkron tanpa menulis `outbox`.
+- `usulan_harga` tidak bisa dihapus dan hanya boleh di-UPDATE sekali: dari `menunggu` ke `disetujui`/`ditolak` (trigger). Keputusan tercatat di `log_aktivitas` (`usulan_harga`, `usulan_harga_disetujui`, `usulan_harga_ditolak`).
+- Pemberitahuan: tombol manual "Kirim ke WA" membuka WhatsApp dengan pesan terisi (`wa.me`, tanpa nomor, pengirim memilih penerima). **Tidak ada pengiriman otomatis** dan tidak memakai layanan berbayar.
+- Batas diketahui: kalau PC toko offline dan SPV memutuskan di toko sementara Admin pusat memutuskan hal berbeda, yang sampai ke server lebih dulu yang berlaku di server; tampilan PC toko yang kalah tidak diubah.
 
 **Mode latihan**
 - File database terpisah `pos_toko_latihan.db` (salinan barang, harga, HPP, stok, akun, pengaturan printer; TANPA
@@ -183,5 +196,5 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 
 - [ ] Cara menghitung HPP (sementara: rata-rata tertimbang)
 - [ ] Siapa boleh menambah kategori (saran: Admin saja)
-- [ ] Batas penurunan harga tanpa PIN SPV (sementara: 10%)
+- [ ] Batas penurunan harga yang diberi peringatan di layar persetujuan (sementara: 10%)
 - [ ] Rumus saran order (sementara: isi sampai 2× stok minimum)

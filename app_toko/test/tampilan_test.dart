@@ -358,6 +358,35 @@ void main() {
     s.app.keluar();
   });
 
+  testWidgets('usulan harga kasir: tawaran Kirim ke WA setelah ubah harga; SPV bisa meneruskan dari layar Persetujuan harga', (t) async {
+    final dibuka = <String>[];
+    pembukaTautanUji = (u) async => dibuka.add(u);
+    addTearDown(() => pembukaTautanUji = null);
+    final s = await t.runAsync(_siapkanToko);
+    final app = s!.app;
+    final barang = app.katalog.cariBarcode('8990001', app.cabang.id)!;
+    // Kasir mengusulkan harga lewat repo (sama dengan layar Ubah harga), SPV meneruskan lewat WA dari layar Persetujuan.
+    final id = app.harga.ubahHarga(cabang: app.cabang, barangId: barang.id, hargaBaru: 17000, grosir: const [], alasan: 'Promo', oleh: s.kasir)!;
+    final pesan = app.harga.pesanWaUsulan(app.cabang, usulanId: id)!;
+    expect(pesan, startsWith('Usulan harga perlu disetujui'));
+    expect(pesan, contains('Diubah oleh: Siti'));
+
+    app.masuk(s.spv);
+    await _pasang(t, app);
+    await t.tap(find.text(MenuAdmin.usulanHarga.label).first);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    await t.tap(find.byKey(ValueKey('wa-$id')));
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('Teruskan ke WhatsApp?'), findsOneWidget);
+    await t.tap(find.text('Kirim ke WA').last);
+    await t.pump(const Duration(milliseconds: 400));
+    expect(dibuka.single, startsWith('https://wa.me/?text='));
+    expect(Uri.parse(dibuka.single).queryParameters['text'], pesan);
+    app.keluar();
+  });
+
   testWidgets('admin: Esc dari halaman dalam kembali ke menu ikon', (t) async {
     final s = await t.runAsync(_siapkanToko);
     s!.app.masuk(s.admin);

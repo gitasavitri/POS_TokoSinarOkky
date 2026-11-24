@@ -165,11 +165,17 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
     setState(() => _konfirmasi = true);
   }
 
-  void _kirim() {
+  Future<void> _kirim() async {
+    String? pesanWa;
     try {
-      app.barangMasuk.kirim(cabang: app.cabang, oleh: app.penggunaAktif!, draft: _draft);
+      final bmId = app.barangMasuk.kirim(cabang: app.cabang, oleh: app.penggunaAktif!, draft: _draft);
+      pesanWa = app.harga.pesanWaUsulan(app.cabang, refId: bmId);
       app.barangMasuk.hapusDraft();
-      tampilkanPesan(context, 'Barang masuk tersimpan dan terkunci. Stok sudah bertambah.');
+      tampilkanPesan(
+          context,
+          pesanWa == null
+              ? 'Barang masuk tersimpan dan terkunci. Stok sudah bertambah.'
+              : 'Barang masuk tersimpan. Stok bertambah; harga baru menunggu persetujuan SPV/Admin.');
       setState(() {
         _draft = DraftBarangMasuk(supplierId: _draft.supplierId);
         _faktur.clear();
@@ -179,6 +185,7 @@ class _IsiBarangMasukState extends State<IsiBarangMasuk> {
     } catch (e) {
       tampilkanPesan(context, pesanGalat(e), galat: true);
     }
+    if (pesanWa != null && mounted) await tawarkanKirimWa(context, pesanWa);
   }
 
   @override

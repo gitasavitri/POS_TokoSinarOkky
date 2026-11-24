@@ -94,6 +94,8 @@ class _IsiUbahHargaState extends State<IsiUbahHarga> {
         _barang = null;
         _muatAntrean();
       });
+      final pesan = usulanId == null ? null : app.harga.pesanWaUsulan(app.cabang, usulanId: usulanId);
+      if (pesan != null) await tawarkanKirimWa(context, pesan);
     } catch (e) {
       if (mounted) tampilkanPesan(context, pesanGalat(e), galat: true);
     }

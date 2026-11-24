@@ -59,6 +59,12 @@ class _IsiUsulanHargaState extends State<IsiUsulanHarga> {
     if (mounted) _muat();
   }
 
+  Future<void> _kirimWa(UsulanHargaBaris u) async {
+    final pesan = context.app.harga.pesanWaUsulan(context.app.cabang, usulanId: u.id);
+    if (pesan == null) return tampilkanPesan(context, 'Usulan ini sudah diputuskan.', galat: true);
+    await tawarkanKirimWa(context, pesan, judul: 'Teruskan ke WhatsApp?');
+  }
+
   String _grosirTeks(UsulanHargaBaris u) =>
       u.grosir.isEmpty ? '-' : u.grosir.map((g) => '≥${g.minQty}: ${formatRupiah(g.harga)}').join('\n');
 
@@ -95,6 +101,12 @@ class _IsiUsulanHargaState extends State<IsiUsulanHarga> {
                       Text(u.alasan, style: gayaSel),
                       Text('${u.dimintaOleh}\n${formatJam(u.dibuat)} ${formatTanggal(u.dibuat)}', style: const TextStyle(fontSize: 15)),
                       Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 6, children: [
+                        OutlinedButton(
+                          key: ValueKey('wa-${u.id}'),
+                          onPressed: () => _kirimWa(u),
+                          style: OutlinedButton.styleFrom(foregroundColor: Warna.hijauIkon, minimumSize: const Size(48, 46)),
+                          child: const Text('WA'),
+                        ),
                         OutlinedButton(
                           onPressed: () => _putuskan(u, false),
                           style: OutlinedButton.styleFrom(foregroundColor: Warna.merah, minimumSize: const Size(48, 46)),

@@ -7,3 +7,4 @@ export 'src/periode.dart';
 export 'src/tabel.dart';
 export 'src/tema.dart';
 export 'src/umum.dart';
+export 'src/whatsapp.dart';
