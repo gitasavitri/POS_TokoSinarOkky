@@ -550,7 +550,9 @@ class _FormItemState extends State<_FormItem> {
       if (nilai.isNotEmpty) _ubah(() => k == _kKategori ? it.kategoriId = nilai[baru] : it.satuan = nilai[baru]);
       return KeyEventResult.handled;
     }
-    if (pilihan && _enter(t)) {
+    // Kotak isian dibuat multi-baris (expands) supaya tingginya seragam, dan di kotak seperti itu
+    // Enter dari keyboard asli menyisipkan baris baru, bukan memicu onSubmitted. Jadi Enter ditangani di sini.
+    if (_enter(t)) {
       _maju(k);
       return KeyEventResult.handled;
     }

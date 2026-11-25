@@ -824,8 +824,10 @@ void main() {
     await _tunggu(t);
 
     bool fokus(String kunci) => t.widget<TextField>(find.byKey(ValueKey(kunci))).focusNode!.hasFocus;
+    // Tombol Enter sungguhan (seperti keyboard Windows), bukan aksi "done" dari keyboard layar:
+    // di kotak multi-baris, Enter asli tadinya menyisipkan baris baru dan kursor tidak pindah.
     Future<void> enter() async {
-      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.sendKeyEvent(LogicalKeyboardKey.enter);
       await t.pump(const Duration(milliseconds: 100));
     }
 
