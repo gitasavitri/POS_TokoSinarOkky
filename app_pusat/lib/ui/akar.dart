@@ -44,7 +44,7 @@ class _AplikasiPusatState extends State<AplikasiPusat> {
   Widget build(BuildContext context) => SesiScope(
         sesi: widget.sesi,
         child: MaterialApp(
-          title: 'POS Pusat',
+          title: 'TOKO SO Pusat',
           debugShowCheckedModeBanner: false,
           theme: buatTema(),
           builder: (context, child) => Listener(

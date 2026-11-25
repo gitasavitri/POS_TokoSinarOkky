@@ -65,7 +65,7 @@ class _AplikasiTokoState extends State<AplikasiToko> {
       key: ValueKey(app.latihan),
       aplikasi: app,
       child: MaterialApp(
-        title: app.latihan ? 'POS Toko · MODE LATIHAN' : 'POS Toko',
+        title: app.latihan ? 'TOKO SO · MODE LATIHAN' : 'TOKO SO',
         debugShowCheckedModeBanner: false,
         theme: buatTema(),
         builder: (context, child) => Listener(

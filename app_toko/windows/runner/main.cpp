@@ -10,7 +10,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Hanya boleh satu aplikasi kasir terbuka. Kalau sudah terbuka, tampilkan jendela yang ada lalu keluar.
   HANDLE satu_saja = ::CreateMutexW(nullptr, TRUE, L"Local\\POS_Toko_SinarOkky");
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND ada = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"POS Toko Sinar Okky");
+    HWND ada = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"TOKO SO");
     if (ada != nullptr) {
       ::ShowWindow(ada, SW_RESTORE);
       ::SetForegroundWindow(ada);
@@ -38,7 +38,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1366, 768);
-  if (!window.Create(L"POS Toko Sinar Okky", origin, size)) {
+  if (!window.Create(L"TOKO SO", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

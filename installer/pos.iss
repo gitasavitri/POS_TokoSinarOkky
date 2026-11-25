@@ -15,15 +15,15 @@
 #endif
 
 #if APP == "toko"
-  #define NamaApp "POS Toko Sinar Okky"
-  #define NamaPendek "POS Toko"
+  #define NamaApp "TOKO SO"
+  #define NamaPendek "TOKO SO"
   #define Exe "app_toko.exe"
   #define Folder "app_toko"
   #define IdApp "{{6F1C3E2A-4B7D-4E59-9A1F-2C8D5B7E0A11}"
   #define Berkas "POS-Toko-Setup"
 #else
-  #define NamaApp "POS Pusat Sinar Okky"
-  #define NamaPendek "POS Pusat"
+  #define NamaApp "TOKO SO Pusat"
+  #define NamaPendek "TOKO SO Pusat"
   #define Exe "app_pusat.exe"
   #define Folder "app_pusat"
   #define IdApp "{{8A2D4F6B-1C3E-4A7D-B5E9-3F0A6C8D2B22}"
@@ -35,7 +35,7 @@ AppId={#IdApp}
 AppName={#NamaApp}
 AppVersion={#VERSI}
 AppVerName={#NamaApp} {#VERSI}
-AppPublisher=Toko Sinar Okky
+AppPublisher=TOKO SO
 DefaultDirName={autopf}\{#NamaApp}
 DefaultGroupName={#NamaApp}
 DisableProgramGroupPage=yes

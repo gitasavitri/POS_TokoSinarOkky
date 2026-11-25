@@ -19,7 +19,7 @@ class AplikasiPemulihan extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'POS Toko · Pemulihan',
+        title: 'TOKO SO · Pemulihan',
         debugShowCheckedModeBanner: false,
         theme: buatTema(),
         home: HalamanPemulihan(lokasiDatabase: lokasiDatabase, folderCadangan: folderCadangan, masalah: masalah, onSelesai: onSelesai),
