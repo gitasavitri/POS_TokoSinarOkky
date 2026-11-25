@@ -45,7 +45,8 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 4. **Setiap tabel data toko punya `cabang_id`.**
 5. **Data transaksi dan riwayat hanya boleh ditambah, tidak boleh diubah atau dihapus.**
    Ini dijaga trigger di database. Tabelnya: `transaksi`, `transaksi_item`, `pembayaran`, `pembatalan`,
-   `retur`, `retur_item`, `mutasi_stok`, `harga_jual`, `harga_grosir`, `hpp_barang`, `shift_tutup`, `log_aktivitas`.
+   `retur`, `retur_item`, `mutasi_stok`, `harga_jual`, `harga_grosir`, `hpp_barang`, `shift_tutup`, `log_aktivitas`,
+   `kas_shift`, `shift_hitung` (migrasi 002), `shift_belum_dihitung` (migrasi 003), `order_barang`, `order_barang_item` (migrasi 005).
    Koreksi = baris baru, bukan mengubah baris lama.
 6. **Stok tidak disimpan sebagai angka yang di-update.** Stok = jumlah semua baris `mutasi_stok` (lihat view `stok_sekarang`).
 7. **Waktu disimpan sebagai teks ISO 8601 UTC**, misalnya `2026-11-05T06:09:00Z`. Tampilkan ke pengguna dalam WIB.
@@ -59,7 +60,7 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 |---|---|---|---|
 | Jual & cetak struk | Ya | Ya | Ya |
 | Beri diskon, batalkan transaksi | PIN SPV | Ya | Ya |
-| Terima retur | Tidak | Ya | Ya |
+| Tukar / kembalikan barang (retur) | Ya, ≤ 3 hari dari tanggal struk; lebih → PIN SPV | Ya | Ya |
 | Catat barang masuk, ubah harga jual & grosir lewat barang masuk | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: naik | Ya | Ya | Ya |
 | Ubah harga tanpa barang masuk: turun >10% atau ≤ HPP | PIN SPV | Ya | Ya |
@@ -68,6 +69,9 @@ Logika bisnis (hitung harga grosir, kembalian, HPP, validasi) ditaruh di `packag
 | Lihat laporan | Tidak | Toko sendiri | Toko sendiri (app toko) / semua (app pusat) |
 | Atur printer di PC kasir | Tidak | Ya | Ya |
 | Kelola karyawan & hak akses | Tidak | Tidak | Ya |
+| Order barang ke toko utama / supplier | Ya | Ya | Ya |
+| Impor stok awal dari Excel | Tidak | Ya | Ya |
+| Nyalakan mode latihan (dari layar masuk, PIN) | Tidak | Ya | Ya |
 
 "PIN SPV" artinya kasir tetap bisa melakukannya setelah SPV memasukkan PIN-nya di layar yang sama.
 Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
@@ -80,7 +84,8 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Keluar otomatis setelah 10 menit tidak dipakai.
 
 **Harga**
-- Harga jual berlaku = baris `harga_jual` terbaru untuk (barang, cabang ini). Kalau tidak ada, pakai baris terbaru dengan `cabang_id IS NULL` (harga semua cabang).
+- Harga jual berlaku = versi **terbaru** (menurut `berlaku_mulai`) di antara harga khusus toko ini dan harga semua toko (`cabang_id IS NULL`).
+  Perubahan harga dari Aplikasi Toko (barang masuk / ubah harga) berlaku untuk toko itu saja. Harga dari pusat yang lebih baru menggantikannya.
 - Harga grosir bertingkat melekat pada satu versi harga jual (`harga_grosir.harga_jual_id`).
 - Saat menjual: pilih tingkat dengan `min_qty` terbesar yang `≤ jumlah` di baris itu. **Harga grosir berlaku untuk seluruh jumlah di baris itu.**
   Contoh: tingkat min 10 = Rp17.000; beli 15 → 15 × Rp17.000.
@@ -108,6 +113,42 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - Pembatalan = baris di tabel `pembatalan` + `mutasi_stok` jenis `batal_jual` yang mengembalikan stok. Transaksi asli tidak diubah.
 - Tahan transaksi disimpan sementara di memori/tabel draft, bukan tabel `transaksi`.
 
+**Tukar / kembalikan barang (revisi F, 11 Nov 2026)**
+- Scan barcode nomor transaksi di struk. Hanya barang di transaksi itu; jumlah ≤ dibeli dikurangi yang sudah diretur (dijaga trigger).
+- Kasir boleh sendiri, tanpa batas nominal, sampai 3 hari kalender WIB dari tanggal struk; lewat → PIN SPV (`retur.disetujui_oleh`).
+- Uang retur selalu **tunai** dari uang kasir shift aktif (`retur.shift_id`), juga untuk transaksi QRIS/kartu/transfer.
+- Barang rusak: `retur_item.kembali_ke_stok = 0`, tidak ada `mutasi_stok`.
+- Nomor struk retur `RTR-<kode cabang>-<YYMMDD>-<urut 4 digit>`. Struk retur tanpa barcode.
+- Tukar barang = retur + transaksi baru dalam satu transaksi database: `retur.transaksi_tukar_id`, potongan di
+  `retur.dipotong` = `pembayaran.potongan_retur`. Pembeli membayar selisih; kalau nilai retur lebih besar, sisanya tunai.
+  Satu struk tukar. Transaksi tukar tidak bisa dibatalkan.
+- Semua retur oleh kasir muncul di "Perlu dicek" SPV/Admin + `log_aktivitas` (aksi `retur`).
+- Struk dan pesan bawah struk **tidak boleh** menulis aturan tukar/retur.
+
+**Order barang (revisi G, 11 Nov 2026)**
+- Daftar barang toko + stok + stok minimum + saran. Saran = isi sampai **2× stok minimum** kalau stok ≤ minimum
+  (ASUMSI, lihat Keputusan terbuka). "Perlu order" = habis atau hampir habis (sama dengan Cek stok & harga).
+- Nomor order `ORD-<kode cabang>-<YYMMDD>-<urut 4 digit>`, urut per cabang per hari WIB. Order tidak mengubah stok.
+- Hasil: PDF "Surat Pesanan Barang" + Excel di `Documents\POS-Order`. Order disimpan di PC toko (`order_barang`), BELUM
+  dikirim ke pusat (hanya `log_aktivitas` aksi `buat_order`). Kirim order ke pusat lewat aplikasi menyusul.
+
+**Salin daftar barang (revisi I)**
+- Aplikasi Pusat → Toko & perangkat → "Salin dari toko lain": tulis `barang_cabang` toko tujuan (lewat tabel `perubahan`,
+  ikut sinkron ke PC toko). Stok TIDAK ikut. Stok minimum ikut dari toko asal. Barang yang belum punya harga di toko
+  tujuan memakai harga + grosir terbaru toko asal (`harga_jual.cabang_id` = toko tujuan, sumber `pusat`).
+
+**Impor stok awal dari Excel (revisi J)**
+- Hanya SPV/Admin, lewat Barang masuk. Kolom: Barcode, Nama barang, Kategori, Satuan, Jumlah, HPP, Harga jual.
+- Hasilnya SATU barang masuk biasa (terkirim & terkunci): stok, HPP rata-rata, harga, barang baru masuk `barang_cabang`.
+- Barcode yang sudah ada: hanya stok/HPP/harga; nama/kategori/satuan tidak diubah. Baris salah ditandai dan dilewati.
+
+**Mode latihan**
+- File database terpisah `pos_toko_latihan.db` (salinan barang, harga, HPP, stok, akun, pengaturan printer; TANPA
+  alamat server/token). Tidak ada sinkron dan cadangan. Data asli tetap sinkron di belakang.
+- Pita oranye "MODE LATIHAN" di semua layar. Semua cetakan bertulisan `LATIHAN - BUKAN STRUK ASLI`; struk latihan
+  **tanpa barcode** (nomor TRX latihan bisa sama dengan nomor asli).
+- Aplikasi dibuka ulang → selalu data asli. "Hapus data latihan" = hapus file lalu salin ulang dari data asli.
+
 **Struk**
 - Kertas 58 mm, 32 karakter per baris, dicetak dengan perintah ESC/POS.
 - Isi: nama toko, cabang, alamat, no. transaksi, tanggal (WIB), kasir, daftar barang (`qty x harga`, tanda `*G` untuk harga grosir), total, bayar, kembali, pesan bawah struk, barcode nomor transaksi.
@@ -134,9 +175,13 @@ Persetujuan dicatat di `log_aktivitas` dengan id kasir **dan** id SPV.
 - **Internet: ada di toko kecil.** Sinkronisasi otomatis tetap dipakai, tapi kasir tetap wajib bisa jalan saat internet putus.
 - **Tidak memakai laci uang.**
 - **Toko kecil pertama buka akhir November 2026.**
+- **Server (11 Nov 2026): di PC Windows toko, bukan VPS.** Sementara satu PC = server + kasir; 1–2 bulan lagi kasir
+  pindah ke komputer sendiri. Alamat `http://` hanya boleh untuk localhost/IP jaringan lokal; dari luar wajib https
+  (Cloudflare Tunnel). Lihat `docs/PANDUAN-SERVER-TOKO.md`.
 
 ## 8. Keputusan terbuka (jangan diasumsikan sendiri)
 
 - [ ] Cara menghitung HPP (sementara: rata-rata tertimbang)
 - [ ] Siapa boleh menambah kategori (saran: Admin saja)
 - [ ] Batas penurunan harga tanpa PIN SPV (sementara: 10%)
+- [ ] Rumus saran order (sementara: isi sampai 2× stok minimum)

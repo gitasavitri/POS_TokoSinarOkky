@@ -1,0 +1,17 @@
+name: pos_ui
+description: Tampilan bersama Aplikasi Toko dan Aplikasi Pusat (warna, tema, panel, tabel, grafik).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  pos_core:
+    path: ../pos_core
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
